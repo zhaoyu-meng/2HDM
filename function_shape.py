@@ -1,326 +1,474 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+function_shape.py
+
+Solve the background equations for the oscillon profiles f₀(r) and f₁(r)
+in the 4‑field model (two complex scalars) under the radiation‑free
+parameter choice. The equations correspond to Eq. (4.5) of the paper.
+
+"""
+
 import numpy as np
 from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
+from scipy.integrate import trapezoid
 
-# 1D 情况
-print("=== 1D Case ===")
-# Parameters
-mu = 0.5
-lamb = 1.78
-lamb4 = -2.56
-omega = 0.6
 
-# Domain - 1D coordinates, x from -L to L
-L = 50.0  # Domain half-length
-N = 500
-dx = 2 * L / N
-x = np.linspace(-L, L, N+1)
+# ----------------------------------------------------------------------
+#  Solver for 2D polar coordinates
+# ----------------------------------------------------------------------
+def solve_2d_polar(omega, f0_initial, f1_initial, R=32.0, N=1000,
+                   mu=0.5, lamb=1.78, lamb4=-2.56):
+    """
+    Solve the coupled ODEs for f₀(r) and f₁(r) in 2D polar coordinates.
 
-# Number of variables: 2*(N+1)
-def equations_1d(y):
-    f0 = y[0:N+1]
-    f1 = y[N+1:2*(N+1)]
-    res0 = np.zeros(N+1)
-    res1 = np.zeros(N+1)
-    
-    # For f0 - 1D Laplacian: ∇²f = f''
-    for i in range(0, N+1):
-        if i == 0:  # Left boundary: df/dx = 0
-            laplacian_f0 = (2 * f0[1] - 2 * f0[0]) / dx**2
-        elif i == N:  # Right boundary: df/dx = 0
-            laplacian_f0 = (2 * f0[N-1] - 2 * f0[N]) / dx**2
-        else:  # Interior points
-            # 1D Laplacian: f''
-            laplacian_f0 = (f0[i-1] - 2*f0[i] + f0[i+1]) / dx**2
-        
-        nonlinear_f0 = mu * f0[i] - 2*lamb * f0[i] * (4 * f0[i]**2 + 2 * f1[i]**2) + 2 * lamb4 * f0[i] * (-2 * f0[i]**2 + f1[i]**2)
-        res0[i] = laplacian_f0 + nonlinear_f0
-    
-    # For f1 - special treatment to enforce both f1=0 and df1/dx=0 at boundaries
-    for i in range(0, N+1):
-        if i == 0:  # Left boundary: f1 = 0 and df1/dx = 0
-            res1[i] = f1[0]
-        elif i == 1:  # First interior point - use special treatment
-            laplacian_f1 = (f1[0] - 2*f1[1] + f1[2]) / dx**2
-            nonlinear_f1 = omega**2 * f1[i] + mu * f1[i] - 2*lamb * f1[i] * (4 * f0[i]**2 + 2 * f1[i]**2) - 2 * lamb4 * f1[i] * (-2 * f0[i]**2 + f1[i]**2)
-            res1[i] = laplacian_f1 + nonlinear_f1
-        elif i == N-1:  # Second to last point - use special treatment
-            laplacian_f1 = (f1[N-2] - 2*f1[N-1] + f1[N]) / dx**2
-            nonlinear_f1 = omega**2 * f1[i] + mu * f1[i] - 2*lamb * f1[i] * (4 * f0[i]**2 + 2 * f1[i]**2) - 2 * lamb4 * f1[i] * (-2 * f0[i]**2 + f1[i]**2)
-            res1[i] = laplacian_f1 + nonlinear_f1
-        elif i == N:  # Right boundary: f1 = 0 and df1/dx = 0
-            res1[i] = f1[N]
-        else:  # Interior points
-            laplacian_f1 = (f1[i-1] - 2*f1[i] + f1[i+1]) / dx**2
-            nonlinear_f1 = omega**2 * f1[i] + mu * f1[i] - 2*lamb * f1[i] * (4 * f0[i]**2 + 2 * f1[i]**2) - 2 * lamb4 * f1[i] * (-2 * f0[i]**2 + f1[i]**2)
-            res1[i] = laplacian_f1 + nonlinear_f1
-    
-    return np.concatenate([res0, res1])
+    Parameters
+    ----------
+    omega : float
+        Oscillon frequency (in units of m_h).
+    f0_initial, f1_initial : array_like
+        Initial guesses for f₀(r) and f₁(r) on the radial grid.
+    R : float
+        Maximum radius for the solution.
+    N : int
+        Number of radial grid points.
+    mu, lamb, lamb4 : float
+        Dimensionless potential parameters (see paper Appendix 1).
 
-# Initial guess for 1D
-f0_initial_1d = 0.43 * np.ones(N+1) - 0.43 * (np.cosh(x/3)**(-1))
-f1_initial_1d = -0.6 * ((np.cosh(x/3))**(-1))
-f1_initial_1d[0] = 0.0
-f1_initial_1d[N] = 0.0
-y_initial_1d = np.concatenate([f0_initial_1d, f1_initial_1d])
+    Returns
+    -------
+    r : ndarray
+        Radial grid points (0 to R).
+    f0_solution, f1_solution : ndarray
+        Solved profiles f₀(r) and f₁(r).
+    """
+    dr = R / N
+    r = np.linspace(0, R, N + 1)
+    r_safe = r.copy()
+    r_safe[0] = 1e-11
 
-# Solve 1D
-print("Solving 1D system...")
-solution_1d = fsolve(equations_1d, y_initial_1d, maxfev=5000)
-print("1D solution found!")
+    def equations(y):
+        f0 = y[:N+1]
+        f1 = y[N+1:2*(N+1)]
+        res0 = np.zeros(N+1)
+        res1 = np.zeros(N+1)
 
-# Extract 1D solutions
-f0_solution_1d = solution_1d[0:N+1]
-f1_solution_1d = solution_1d[N+1:2*(N+1)]
+        # f0 equation (2D polar Laplacian)
+        for i in range(N+1):
+            if i == 0:
+                laplacian = 2 * (f0[1] - f0[0]) / dr**2
+            elif i == N:
+                laplacian = (2 * f0[N-1] - 2 * f0[N]) / dr**2
+            else:
+                second = (f0[i-1] - 2*f0[i] + f0[i+1]) / dr**2
+                first  = (f0[i+1] - f0[i-1]) / (2 * dr)
+                laplacian = second + (1 / r_safe[i]) * first
+            nonlinear = mu * f0[i] - 2*lamb * f0[i] * (2*f0[i]**2 + 2*f1[i]**2) \
+                        + 2*lamb4 * f0[i] * (-f0[i]**2 + f1[i]**2)
+            res0[i] = laplacian + nonlinear
 
-# Calculate gradients for 1D
-f0_grad_1d = np.gradient(f0_solution_1d, dx)
-f1_grad_1d = np.gradient(f1_solution_1d, dx)
+        # f1 equation
+        for i in range(N+1):
+            if i == 0:
+                laplacian = 2 * (f1[1] - f1[0]) / dr**2
+            elif i == N:
+                laplacian = (2 * f1[N-1] - 2 * f1[N]) / dr**2
+            else:
+                second = (f1[i-1] - 2*f1[i] + f1[i+1]) / dr**2
+                first  = (f1[i+1] - f1[i-1]) / (2 * dr)
+                laplacian = second + (1 / r_safe[i]) * first
+            nonlinear = omega**2 * f1[i] + mu * f1[i] \
+                        - 2*lamb * f1[i] * (2*f0[i]**2 + 2*f1[i]**2) \
+                        - 2*lamb4 * f1[i] * (-f0[i]**2 + f1[i]**2)
+            res1[i] = laplacian + nonlinear
 
-# Calculate the expression for 1D
-expression_1d = (2 * (omega**2 * f1_solution_1d)**2 +
-                 4 * f0_grad_1d**2 + 
-                 2 * f1_grad_1d**2 -
-                 mu * (2*f0_solution_1d**2 + f1_solution_1d**2) +
-                 lamb * (2*f0_solution_1d**2 + f1_solution_1d**2)**2 +
-                 lamb4 * (-2*f0_solution_1d**2 + f1_solution_1d**2)**2)
+        return np.concatenate([res0, res1])
 
-# 2D Polar Coordinates
-print("\n=== 2D Polar Coordinates ===")
-# Domain - polar coordinates, r from 0 to R
-R = 50.0  # Maximum radius
-N = 500
-dr = R / N
-r = np.linspace(0, R, N+1)
+    y_init = np.concatenate([f0_initial, f1_initial])
+    print(f"Solving 2D system (ω={omega})...")
+    sol = fsolve(equations, y_init, xtol=1e-13, maxfev=10_000_000)
+    print("2D solution found.")
+    return r, sol[:N+1], sol[N+1:]
 
-# Avoid division by zero at r=0
-r_safe = r.copy()
-r_safe[0] = 1e-10
 
-def equations_2d(y):
-    f0 = y[0:N+1]
-    f1 = y[N+1:2*(N+1)]
-    res0 = np.zeros(N+1)
-    res1 = np.zeros(N+1)
-    
-    # For f0 - polar Laplacian: ∇²f = f'' + (1/r)f'
-    for i in range(0, N+1):
+# ----------------------------------------------------------------------
+#  Solver for 3D spherical coordinates
+# ----------------------------------------------------------------------
+def solve_3d_spherical(omega, f0_initial, f1_initial, R=32.0, N=1000,
+                       mu=0.5, lamb=1.78, lamb4=-2.56):
+    """
+    Solve the coupled ODEs for f₀(r) and f₁(r) in 3D spherical coordinates.
+
+    The Laplacian in 3D is ∇²f = f'' + (2/r) f'.
+    """
+    dr = R / N
+    r = np.linspace(0, R, N + 1)
+    r_safe = r.copy()
+    r_safe[0] = 1e-11
+
+    def equations(y):
+        f0 = y[:N+1]
+        f1 = y[N+1:2*(N+1)]
+        res0 = np.zeros(N+1)
+        res1 = np.zeros(N+1)
+
+        for i in range(N+1):
+            if i == 0:
+                laplacian0 = 3 * (f0[1] - f0[0]) / dr**2
+                laplacian1 = 3 * (f1[1] - f1[0]) / dr**2
+            elif i == N:
+                laplacian0 = (2 * f0[N-1] - 2 * f0[N]) / dr**2
+                laplacian1 = (2 * f1[N-1] - 2 * f1[N]) / dr**2
+            else:
+                second0 = (f0[i-1] - 2*f0[i] + f0[i+1]) / dr**2
+                first0  = (f0[i+1] - f0[i-1]) / (2 * dr)
+                laplacian0 = second0 + (2 / r_safe[i]) * first0
+
+                second1 = (f1[i-1] - 2*f1[i] + f1[i+1]) / dr**2
+                first1  = (f1[i+1] - f1[i-1]) / (2 * dr)
+                laplacian1 = second1 + (2 / r_safe[i]) * first1
+
+            nonlinear0 = mu * f0[i] - 2*lamb * f0[i] * (2*f0[i]**2 + 2*f1[i]**2) \
+                        + 2*lamb4 * f0[i] * (-f0[i]**2 + f1[i]**2)
+            nonlinear1 = omega**2 * f1[i] + mu * f1[i] \
+                        - 2*lamb * f1[i] * (2*f0[i]**2 + 2*f1[i]**2) \
+                        - 2*lamb4 * f1[i] * (-f0[i]**2 + f1[i]**2)
+
+            res0[i] = laplacian0 + nonlinear0
+            res1[i] = laplacian1 + nonlinear1
+
+        return np.concatenate([res0, res1])
+
+    y_init = np.concatenate([f0_initial, f1_initial])
+    print(f"Solving 3D system (ω={omega})...")
+    sol = fsolve(equations, y_init, xtol=1e-13, maxfev=10_000_000)
+    print("3D solution found.")
+    return r, sol[:N+1], sol[N+1:]
+
+
+# ----------------------------------------------------------------------
+#  Utility functions for derivatives and integrals
+# ----------------------------------------------------------------------
+def derivative(f, r, dr):
+    """Compute df/dr using central differences, handling boundaries."""
+    N = len(r) - 1
+    df = np.zeros_like(r)
+    for i in range(N+1):
         if i == 0:
-            laplacian_f0 = 2 * (f0[1] - f0[0]) / dr**2
+            df[i] = (f[1] - f[0]) / dr
         elif i == N:
-            laplacian_f0 = (2 * f0[N-1] - 2 * f0[N]) / dr**2
+            df[i] = (f[N] - f[N-1]) / dr
         else:
-            second_deriv = (f0[i-1] - 2*f0[i] + f0[i+1]) / dr**2
-            first_deriv = (f0[i+1] - f0[i-1]) / (2 * dr)
-            laplacian_f0 = second_deriv + (1 / r_safe[i]) * first_deriv
-        
-        nonlinear_f0 = mu * f0[i] - 2*lamb * f0[i] * (4 * f0[i]**2 + 2 * f1[i]**2) + 2 * lamb4 * f0[i] * (-2 * f0[i]**2 + f1[i]**2)
-        res0[i] = laplacian_f0 + nonlinear_f0
-    
-    # For f1 - polar Laplacian
-    for i in range(0, N+1):
-        if i == 0:
-            laplacian_f1 = 2 * (f1[1] - f1[0]) / dr**2
-        elif i == N:
-            laplacian_f1 = (2 * f1[N-1] - 2 * f1[N]) / dr**2
-        else:
-            second_deriv = (f1[i-1] - 2*f1[i] + f1[i+1]) / dr**2
-            first_deriv = (f1[i+1] - f1[i-1]) / (2 * dr)
-            laplacian_f1 = second_deriv + (1 / r_safe[i]) * first_deriv
-        
-        nonlinear_f1 = omega**2 * f1[i] + mu * f1[i] - 2*lamb * f1[i] * (4 * f0[i]**2 + 2 * f1[i]**2) - 2 * lamb4 * f1[i] * (-2 * f0[i]**2 + f1[i]**2)
-        res1[i] = laplacian_f1 + nonlinear_f1
-    
-    return np.concatenate([res0, res1])
-
-# Initial guess for 2D
-f0_initial_2d = 0.43 * np.ones(N+1) - 0.43 * (np.cosh(r/3)**(-1))
-f1_initial_2d = -0.6 * ((np.cosh(r/3))**(-1))
-f1_initial_2d[N] = 0.0
-y_initial_2d = np.concatenate([f0_initial_2d, f1_initial_2d])
-
-# Solve 2D
-print("Solving 2D system...")
-solution_2d = fsolve(equations_2d, y_initial_2d, maxfev=5000)
-print("2D solution found!")
-
-# Extract 2D solutions
-f0_solution_2d = solution_2d[0:N+1]
-f1_solution_2d = solution_2d[N+1:2*(N+1)]
+            df[i] = (f[i+1] - f[i-1]) / (2 * dr)
+    return df
 
 
-expression_data = np.column_stack((f0_solution_2d, f1_solution_2d))
-header_expression = "r expression_value"
-np.savetxt('expression_2D_polar.txt', expression_data, header=header_expression, fmt='%.8f', comments='')
-print("Expression data saved to 'expression_2D_polar.txt'")
+def compute_Q(r, f1, omega, dim):
+    """
+    Compute Q = ∫ 2 ω f₁² dV.
+    dim = 2 for polar, 3 for spherical.
+    """
+    integrand = 2 * omega * f1**2
+    if dim == 2:
+        dV = 2 * np.pi * r
+    elif dim == 3:
+        dV = 4 * np.pi * r**2
+    else:
+        raise ValueError("dimension must be 2 or 3")
+    return trapezoid(integrand * dV, r)
 
-# Calculate gradients for 2D
-f0_grad_2d = np.gradient(f0_solution_2d, dr)
-f1_grad_2d = np.gradient(f1_solution_2d, dr)
 
-# Calculate the expression for 2D
-expression_2d = (2 * (omega**2 * f1_solution_2d)**2 +
-                 4 * f0_grad_2d**2 + 
-                 2 * f1_grad_2d**2 -
-                 mu * (2*f0_solution_2d**2 + f1_solution_2d**2) +
-                 lamb * (2*f0_solution_2d**2 + f1_solution_2d**2)**2 +
-                 lamb4 * (-2*f0_solution_2d**2 + f1_solution_2d**2)**2)
+def compute_E(r, f0, f1, omega, mu, lamb, lamb4, dim):
+    """
+    Compute total energy E from Eq. (4.5) integrated over space.
+    """
+    dr = r[1] - r[0]
+    df0 = derivative(f0, r, dr)
+    df1 = derivative(f1, r, dr)
 
-# 3D Spherical Coordinates
-print("\n=== 3D Spherical Coordinates ===")
-def equations_3d(y):
-    f0 = y[0:N+1]
-    f1 = y[N+1:2*(N+1)]
-    res0 = np.zeros(N+1)
-    res1 = np.zeros(N+1)
-    
-    # For f0 - spherical Laplacian: ∇²f = f'' + (2/r)f'
-    for i in range(0, N+1):
-        if i == 0:
-            laplacian_f0 = 3 * (f0[1] - f0[0]) / dr**2
-        elif i == N:
-            laplacian_f0 = (2 * f0[N-1] - 2 * f0[N]) / dr**2
-        else:
-            second_deriv = (f0[i-1] - 2*f0[i] + f0[i+1]) / dr**2
-            first_deriv = (f0[i+1] - f0[i-1]) / (2 * dr)
-            laplacian_f0 = second_deriv + (2 / r_safe[i]) * first_deriv
-        
-        nonlinear_f0 = mu * f0[i] - 2*lamb * f0[i] * (4 * f0[i]**2 + 2 * f1[i]**2) + 2 * lamb4 * f0[i] * (-2 * f0[i]**2 + f1[i]**2)
-        res0[i] = laplacian_f0 + nonlinear_f0
-    
-    # For f1 - spherical Laplacian
-    for i in range(0, N+1):
-        if i == 0:
-            laplacian_f1 = 3 * (f1[1] - f1[0]) / dr**2
-        elif i == N:
-            laplacian_f1 = (2 * f1[N-1] - 2 * f1[N]) / dr**2
-        else:
-            second_deriv = (f1[i-1] - 2*f1[i] + f1[i+1]) / dr**2
-            first_deriv = (f1[i+1] - f1[i-1]) / (2 * dr)
-            laplacian_f1 = second_deriv + (2 / r_safe[i]) * first_deriv
-        
-        nonlinear_f1 = omega**2 * f1[i] + mu * f1[i] - 2*lamb * f1[i] * (4 * f0[i]**2 + 2 * f1[i]**2) - 2 * lamb4 * f1[i] * (-2 * f0[i]**2 + f1[i]**2)
-        res1[i] = laplacian_f1 + nonlinear_f1
-    
-    return np.concatenate([res0, res1])
+    term1 = (omega**2 * f1)**2
+    term2 = df0**2
+    term3 = df1**2
+    term4 = -mu * (f0**2 + f1**2)
+    term5 = 2 * lamb * (f0**2 + f1**2)**2
+    term6 = lamb4 * (-f0**2 + f1**2)**2
 
-# Initial guess for 3D
-f0_initial_3d = 0.43 * np.ones(N+1) - 0.43 * (np.cosh(r/3)**(-1))
-f1_initial_3d = -0.6 * ((np.cosh(r/3))**(-1))
-f1_initial_3d[N] = 0.0
-y_initial_3d = np.concatenate([f0_initial_3d, f1_initial_3d])
+    integrand = (term1 + term2 + term3 + term4 + term5 + term6 + 0.0625) * 2
 
-# Solve 3D
-print("Solving 3D system...")
-solution_3d = fsolve(equations_3d, y_initial_3d, maxfev=5000)
-print("3D solution found!")
+    if dim == 2:
+        dV = 2 * np.pi * r
+    else:
+        dV = 4 * np.pi * r**2
+    return trapezoid(integrand * dV, r)
 
-# Extract 3D solutions
-f0_solution_3d = solution_3d[0:N+1]
-f1_solution_3d = solution_3d[N+1:2*(N+1)]
 
-# Calculate gradients for 3D
-f0_grad_3d = np.gradient(f0_solution_3d, dr)
-f1_grad_3d = np.gradient(f1_solution_3d, dr)
+# ----------------------------------------------------------------------
+#  Main script: compute profiles for a set of frequencies (including ω = 0.45)
+# ----------------------------------------------------------------------
+def main():
+    # Parameters (same as in the paper)
+    mu = 0.5
+    lamb = 1.78
+    lamb4 = -2.56
+    R = 32.0
+    N = 320
+    r = np.linspace(0, R, N+1)
 
-# Calculate the expression for 3D
-expression_3d = (2 * (omega**2 * f1_solution_3d)**2 +
-                 4 * f0_grad_3d**2 + 
-                 2 * f1_grad_3d**2 -
-                 mu * (2*f0_solution_3d**2 + f1_solution_3d**2) +
-                 lamb * (2*f0_solution_3d**2 + f1_solution_3d**2)**2 +
-                 lamb4 * (-2*f0_solution_3d**2 + f1_solution_3d**2)**2)
+    # List of frequencies and corresponding initial guesses (2D and 3D)
+    # (The guesses are tuned to converge; many are commented out to keep the
+    #  script focused on the main frequency ω = 0.45 used in the paper.)
+    omega_configs = [
+        (0.3,
+         ((1+np.tanh((r-10.0)/1.5))*0.25, (1-np.tanh((r-9.5)/1.5))*0.27),
+         ((1+np.tanh((r-19.0)/1.5))*0.25, (1-np.tanh((r-18.5)/1.5))*0.26)),
 
-# Plot the expressions for all three cases
-plt.figure(figsize=(15, 10))
+        (0.37,
+         ((1+np.tanh((r-6.5)/2))*0.25, (1-np.tanh((r-6.5)/2))*0.27),
+         ((1+np.tanh((r-12.5)/2))*0.25, (1-np.tanh((r-12.5)/2))*0.26)),
 
-# 1D plot
-plt.subplot(2, 3, 1)
-plt.plot(x, f0_solution_1d, 'b-', label='f0')
-plt.plot(x, f1_solution_1d, 'r-', label='f1')
-plt.title('1D: f0 and f1')
-plt.xlabel('x')
-plt.ylabel('f(x)')
-plt.grid(True)
-plt.legend()
+        (0.45,
+         ((1+np.tanh((r-5.0)/1.5))*0.25, (1-np.tanh((r-4.5)/1.5))*0.29),
+         ((1+np.tanh((r-9.0)/1.5))*0.25, (1-np.tanh((r-8.5)/1.5))*0.29)),
 
-plt.subplot(2, 3, 4)
-plt.plot(x, expression_1d, 'g-')
-plt.title('1D: Energy Density')
-plt.xlabel('x')
-plt.ylabel('Energy Density')
-plt.grid(True)
+        (0.6,
+         ((1+np.tanh((r-3.5)/2))*0.25, (1-np.tanh((r-3.5)/2))*0.29),
+         ((1+np.tanh((r-5)/2))*0.25, (1-np.tanh((r-5)/2))*0.31)),
 
-# 2D plot
-plt.subplot(2, 3, 2)
-plt.plot(r, f0_solution_2d, 'b-', label='f0')
-plt.plot(r, f1_solution_2d, 'r-', label='f1')
-plt.title('2D Polar: f0 and f1')
-plt.xlabel('r')
-plt.ylabel('f(r)')
-plt.grid(True)
-plt.legend()
+        (0.75,
+         ((1+np.tanh((r-3)/2))*0.25, (1-np.tanh((r-3)/2))*0.29),
+         ((1+np.tanh((r-3)/2))*0.25, (1-np.tanh((r-3)/2))*0.29)),
 
-plt.subplot(2, 3, 5)
-plt.plot(r, expression_2d, 'g-')
-plt.title('2D Polar: Energy Density')
-plt.xlabel('r')
-plt.ylabel('Energy Density')
-plt.grid(True)
+        (1.0,
+         (0.5 * np.ones(N+1) - 0.4 * (np.cosh(r/1.5)**(-1)), 0.4 * (np.cosh(r/1.5)**(-1))),
+         (0.5 * np.ones(N+1) - 0.5 * (np.cosh(r/1.5)**(-1)), 0.6 * (np.cosh(r/1.5)**(-1)))),
 
-# 3D plot
-plt.subplot(2, 3, 3)
-plt.plot(r, f0_solution_3d, 'b-', label='f0')
-plt.plot(r, f1_solution_3d, 'r-', label='f1')
-plt.title('3D Spherical: f0 and f1')
-plt.xlabel('r')
-plt.ylabel('f(r)')
-plt.grid(True)
-plt.legend()
+        (1.2,
+         (0.5 * np.ones(N+1) - 0.3 * (np.cosh(r/0.5)**(-1)), 0.35 * (np.cosh(r/0.5)**(-1))),
+         (0.5 * np.ones(N+1) - 0.35 * (np.cosh(r/1)**(-1)), 0.5 * (np.cosh(r/1)**(-1)))),
 
-plt.subplot(2, 3, 6)
-plt.plot(r, expression_3d, 'g-')
-plt.title('3D Spherical: Energy Density')
-plt.xlabel('r')
-plt.ylabel('Energy Density')
-plt.grid(True)
+        (1.4,
+         (0.5 * np.ones(N+1) - 0.15 * (np.cosh(r/1.5)**(-1)), 0.2 * (np.cosh(r/1.5)**(-1))),
+         (0.5 * np.ones(N+1) - 0.25 * (np.cosh(r/1)**(-1)), 0.35 * (np.cosh(r/1)**(-1)))),
 
-plt.tight_layout()
-plt.show()
+        (1.5,
+         (0.5 * np.ones(N+1) - 0.1 * (np.cosh(r/2.5)**(-1)), 0.1 * (np.cosh(r/2.5)**(-1))),
+         (0.5 * np.ones(N+1) - 0.1 * (np.cosh(r/2.5)**(-1)), 0.1 * (np.cosh(r/2.5)**(-1)))),
 
-# Create a combined plot for comparison
-plt.figure(figsize=(12, 8))
+        (1.53,
+         (0.5 * np.ones(N+1) - 0.1 * (np.cosh(r/2.5)**(-1)), 0.1 * (np.cosh(r/2.5)**(-1))),
+         (0.5 * np.ones(N+1) - 0.1 * (np.cosh(r/2.5)**(-1)), 0.1 * (np.cosh(r/2.5)**(-1)))),
 
-plt.subplot(2, 1, 1)
-plt.plot(x, expression_1d, 'b-', label='1D')
-plt.plot(r, expression_2d, 'r-', label='2D Polar')
-plt.plot(r, expression_3d, 'g-', label='3D Spherical')
-plt.title('Comparison of Energy Density Across Dimensions')
-plt.xlabel('Coordinate')
-plt.ylabel('Energy Density')
-plt.grid(True)
-plt.legend()
+        (1.55,
+         (0.5 * np.ones(N+1) - 0.1 * (np.cosh(r/3)**(-1)), 0.1 * (np.cosh(r/3)**(-1))),
+         (0.5 * np.ones(N+1) - 0.1 * (np.cosh(r/3)**(-1)), 0.1 * (np.cosh(r/3)**(-1)))),
 
-plt.subplot(2, 1, 2)
-# Normalize for better comparison
-expression_1d_norm = expression_1d / np.max(np.abs(expression_1d))
-expression_2d_norm = expression_2d / np.max(np.abs(expression_2d))
-expression_3d_norm = expression_3d / np.max(np.abs(expression_3d))
+        (1.57,
+         (0.5 * np.ones(N+1) - 0.04 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1))),
+         (0.5 * np.ones(N+1) - 0.04 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1)))),
 
-plt.plot(x, expression_1d_norm, 'b-', label='1D (normalized)')
-plt.plot(r, expression_2d_norm, 'r-', label='2D Polar (normalized)')
-plt.plot(r, expression_3d_norm, 'g-', label='3D Spherical (normalized)')
-plt.title('Normalized Energy Density Comparison')
-plt.xlabel('Coordinate')
-plt.ylabel('Normalized Energy Density')
-plt.grid(True)
-plt.legend()
+        (1.58,
+         (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1))),
+         (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1)))),
 
-plt.tight_layout()
-plt.show()
+        (1.59,
+         (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1))),
+         (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1)))),
+         
+        #Following functions need larger space to plot (higher R)
+        # (1.595,
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1))),
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1)))),
 
-# Print some statistics
-print("\n=== Expression Statistics ===")
-print(f"1D - Min: {np.min(expression_1d):.6f}, Max: {np.max(expression_1d):.6f}, Mean: {np.mean(expression_1d):.6f}")
-print(f"2D - Min: {np.min(expression_2d):.6f}, Max: {np.max(expression_2d):.6f}, Mean: {np.mean(expression_2d):.6f}")
-print(f"3D - Min: {np.min(expression_3d):.6f}, Max: {np.max(expression_3d):.6f}, Mean: {np.mean(expression_3d):.6f}")
+        # (1.596,
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1))),
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1)))),
+
+        # (1.597,
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1))),
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/5)**(-1)), 0.05 * (np.cosh(r/5)**(-1)))),
+
+        # (1.598,
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/10)**(-1)), 0.05 * (np.cosh(r/10)**(-1))),
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/10)**(-1)), 0.05 * (np.cosh(r/10)**(-1)))),
+
+        # (1.599,
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/10)**(-1)), 0.05 * (np.cosh(r/10)**(-1))),
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/10)**(-1)), 0.05 * (np.cosh(r/10)**(-1)))),
+
+        # (1.5995,
+        #  (0.5 * np.ones(N+1) - 0.015 * (np.cosh(r/10)**(-1)), 0.025 * (np.cosh(r/10)**(-1))),
+        #  (0.5 * np.ones(N+1) - 0.025 * (np.cosh(r/10)**(-1)), 0.025 * (np.cosh(r/10)**(-1)))),
+
+        # (1.5997,
+        #  (0.5 * np.ones(N+1) - 0.01 * (np.cosh(r/15)**(-1)), 0.01 * (np.cosh(r/15)**(-1))),
+        #  (0.5 * np.ones(N+1) - 0.015 * (np.cosh(r/15)**(-1)), 0.015 * (np.cosh(r/15)**(-1)))),
+         
+        # (1.5998,
+        #  (0.5 * np.ones(N+1) - 0.01 * (np.cosh(r/15)**(-1)), 0.01 * (np.cosh(r/15)**(-1))),
+        #  (0.5 * np.ones(N+1) - 0.01 * (np.cosh(r/15)**(-1)), 0.01 * (np.cosh(r/15)**(-1)))),
+
+        # (1.5999,
+        #  (0.5 * np.ones(N+1) - 0.005 * (np.cosh(r/20)**(-1)), 0.005 * (np.cosh(r/20)**(-1))),
+        #  (0.5 * np.ones(N+1) - 0.01 * (np.cosh(r/20)**(-1)), 0.01 * (np.cosh(r/20)**(-1)))),
+    ]
+
+    results_2d = []
+    results_3d = []
+
+    Q_values_2d = []
+    E_values_2d = []
+    Q_values_3d = []
+    E_values_3d = []
+    omega_list = []
+
+    # Loop over all frequencies
+    for omega, (f0_init_2d, f1_init_2d), (f0_init_3d, f1_init_3d) in omega_configs:
+        print(f"\n{'='*60}")
+        print(f"Processing ω = {omega}")
+        print('='*60)
+
+        # Solve in 2D
+        r_2d, f0_2d, f1_2d = solve_2d_polar(
+            omega=omega,
+            f0_initial=f0_init_2d,
+            f1_initial=f1_init_2d,
+            R=R, N=N, mu=mu, lamb=lamb, lamb4=lamb4
+        )
+        Q_2d = compute_Q(r_2d, f1_2d, omega, dim=2)
+        E_2d = compute_E(r_2d, f0_2d, f1_2d, omega, mu, lamb, lamb4, dim=2)
+        results_2d.append((omega, r_2d, f0_2d, f1_2d, f0_init_2d, f1_init_2d, Q_2d, E_2d))
+        Q_values_2d.append(Q_2d)
+        E_values_2d.append(E_2d)
+
+        # Solve in 3D
+        r_3d, f0_3d, f1_3d = solve_3d_spherical(
+            omega=omega,
+            f0_initial=f0_init_3d,
+            f1_initial=f1_init_3d,
+            R=R, N=N, mu=mu, lamb=lamb, lamb4=lamb4
+        )
+        Q_3d = compute_Q(r_3d, f1_3d, omega, dim=3)
+        E_3d = compute_E(r_3d, f0_3d, f1_3d, omega, mu, lamb, lamb4, dim=3)
+        results_3d.append((omega, r_3d, f0_3d, f1_3d, f0_init_3d, f1_init_3d, Q_3d, E_3d))
+        Q_values_3d.append(Q_3d)
+        E_values_3d.append(E_3d)
+
+        omega_list.append(omega)
+
+    # Plot comparison of profiles (2D and 3D)
+    print("\n=== Plotting profile solutions ===")
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    colors = ['b', 'r', 'g', 'm', 'c', 'y', 'orange', 'purple', 'brown', 'pink']
+
+    # 2D f0
+    ax1 = axes[0, 0]
+    for idx, (omega, r, f0, f1, _, _, Q, E) in enumerate(results_2d):
+        ax1.plot(r, f0, color=colors[idx % len(colors)], linewidth=2, label=f'ω={omega:.2f}')
+    ax1.set_title('2D Polar: f₀(r)')
+    ax1.set_xlabel('r')
+    ax1.set_ylabel('f₀(r)')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+
+    # 2D f1
+    ax2 = axes[0, 1]
+    for idx, (omega, r, f0, f1, _, _, Q, E) in enumerate(results_2d):
+        ax2.plot(r, f1, color=colors[idx % len(colors)], linewidth=2, label=f'ω={omega:.2f}')
+    ax2.set_title('2D Polar: f₁(r)')
+    ax2.set_xlabel('r')
+    ax2.set_ylabel('f₁(r)')
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
+
+    # 3D f0
+    ax3 = axes[1, 0]
+    for idx, (omega, r, f0, f1, _, _, Q, E) in enumerate(results_3d):
+        ax3.plot(r, f0, color=colors[idx % len(colors)], linewidth=2, label=f'ω={omega:.2f}')
+    ax3.set_title('3D Spherical: f₀(r)')
+    ax3.set_xlabel('r')
+    ax3.set_ylabel('f₀(r)')
+    ax3.grid(True, alpha=0.3)
+    ax3.legend()
+
+    # 3D f1
+    ax4 = axes[1, 1]
+    for idx, (omega, r, f0, f1, _, _, Q, E) in enumerate(results_3d):
+        ax4.plot(r, f1, color=colors[idx % len(colors)], linewidth=2, label=f'ω={omega:.2f}')
+    ax4.set_title('3D Spherical: f₁(r)')
+    ax4.set_xlabel('r')
+    ax4.set_ylabel('f₁(r)')
+    ax4.grid(True, alpha=0.3)
+    ax4.legend()
+
+    plt.tight_layout()
+    plt.savefig('solutions_comparison.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+    # Plot Q and E vs ω (log-log)
+    print("\n=== Plotting Q and E vs ω ===")
+    omega_arr = np.array(omega_list)
+    Q_2d_arr = np.array(Q_values_2d)
+    E_2d_arr = np.array(E_values_2d)
+    Q_3d_arr = np.array(Q_values_3d)
+    E_3d_arr = np.array(E_values_3d)
+
+    sort_idx = np.argsort(omega_arr)
+    omega_sorted = omega_arr[sort_idx]
+    Q_2d_sorted = Q_2d_arr[sort_idx]
+    E_2d_sorted = E_2d_arr[sort_idx]
+    Q_3d_sorted = Q_3d_arr[sort_idx]
+    E_3d_sorted = E_3d_arr[sort_idx]
+
+    fig2, axes2 = plt.subplots(2, 2, figsize=(14, 10))
+    # 2D Q vs ω
+    axes2[0,0].plot(np.log(omega_sorted), np.log(Q_2d_sorted), 'b.-', linewidth=2, markersize=8)
+    axes2[0,0].set_title('2D: log(Q) vs log(ω)')
+    axes2[0,0].set_xlabel('log(ω)')
+    axes2[0,0].set_ylabel('log(Q)')
+    axes2[0,0].grid(True, alpha=0.3)
+
+    # 2D E vs ω
+    axes2[0,1].plot(np.log(omega_sorted), np.log(E_2d_sorted), 'r.-', linewidth=2, markersize=8)
+    axes2[0,1].set_title('2D: log(E) vs log(ω)')
+    axes2[0,1].set_xlabel('log(ω)')
+    axes2[0,1].set_ylabel('log(E)')
+    axes2[0,1].grid(True, alpha=0.3)
+
+    # 3D Q vs ω
+    axes2[1,0].plot(np.log(omega_sorted), np.log(Q_3d_sorted), 'b.-', linewidth=2, markersize=8)
+    axes2[1,0].set_title('3D: log(Q) vs log(ω)')
+    axes2[1,0].set_xlabel('log(ω)')
+    axes2[1,0].set_ylabel('log(Q)')
+    axes2[1,0].grid(True, alpha=0.3)
+
+    # 3D E vs ω
+    axes2[1,1].plot(np.log(omega_sorted), np.log(E_3d_sorted), 'r.-', linewidth=2, markersize=8)
+    axes2[1,1].set_title('3D: log(E) vs log(ω)')
+    axes2[1,1].set_xlabel('log(ω)')
+    axes2[1,1].set_ylabel('log(E)')
+    axes2[1,1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    # plt.savefig('Q_E_vs_omega.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+    # Save data files
+    print("\n=== Saving data ===")
+    for omega, r, f0, f1, f0_init, f1_init, Q, E in results_2d:
+        data_2d = np.column_stack((r, f0, f1, f0_init, f1_init))
+        np.savetxt(f'2D_solutions_omega_{omega:.2f}_4fields.txt', data_2d,
+                   header=f'r f0 f1 f0_initial f1_initial (ω={omega}) Q={Q:.6e} E={E:.6e}',
+                   fmt='%.8f', comments='')
+        print(f"Saved 2D data for ω={omega:.2f}, Q={Q:.6e}, E={E:.6e}")
+
+    for omega, r, f0, f1, f0_init, f1_init, Q, E in results_3d:
+        data_3d = np.column_stack((r, f0, f1, f0_init, f1_init))
+        np.savetxt(f'3D_solutions_omega_{omega:.2f}_4fields.txt', data_3d,
+                   header=f'r f0 f1 f0_initial f1_initial (ω={omega}) Q={Q:.6e} E={E:.6e}',
+                   fmt='%.8f', comments='')
+        print(f"Saved 3D data for ω={omega:.2f}, Q={Q:.6e}, E={E:.6e}")
+
+
+if __name__ == "__main__":
+    main()
