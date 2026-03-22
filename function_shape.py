@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-function_shape.py
+function_shape_4fields.py
 
 Solve the background equations for the oscillon profiles f₀(r) and f₁(r)
 in the 4‑field model (two complex scalars) under the radiation‑free
 parameter choice. The equations correspond to Eq. (4.5) of the paper.
 
+Author: Zhaoyu Meng
+Date:   June 2025
+License: MIT (see LICENSE file)
 """
 
 import numpy as np
