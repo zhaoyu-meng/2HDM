@@ -69,51 +69,42 @@ Compile example:
     mpic++ -O3 -std=c++11 2HDM_random_initial_2D.cpp -o dw_2hdm
 
 ---
+## 🚀 Quick Start
 
-## 🚀 Quick Start--Natural evolution
+### Natural evolution
 
-
-
-### 1. Run a domain wall decay simulation (random initial conditions)
+#### 1. Run a domain wall decay simulation (random initial conditions)
 
     cd natural_evolution
-    ./2HDM_random_initial_2D          # 2D, full 2HDM, start with ramdom field distribution
+    ./2HDM_random_initial_2D          # 2D, full 2HDM, start with random field distribution
 
+### Reproduction of the long-lived structure
 
-
-## 🚀 Quick Start--Reproduction of the long-lived structure
-
-### 1. Generate background oscillon profiles (required for artificial simulations)
+#### 1. Generate background oscillon profiles
 
     cd ideal_structure/plot
     python function_shape.py
 
 This creates `2D_solutions_omega_0.45.txt` in the root directory.
 
-### 2. Run a domain wall decay simulation (random initial conditions)
-
-    cd ideal_structure/plot
-    ./simulation_2hdm_artificial          # 2D, full 2HDM, start with f0/f1
-
-For 4-fields system, compile and run `simulation_4fields_artificial .cpp` .
-The script reads `2D_solutions_omega_0.45.txt`. Output snapshots are saved in `Data/`.
-
-### 3. Simulate an isolated oscillon (artificial initial condition)
+#### 2. Run an artificial oscillon simulation
 
     cd ideal_structure/plot
     ./simulation_2hdm_artificial      # 2HDM oscillon with absorbing boundaries
 
-### 4. Perform Floquet stability analysis
+For the 4‑field system, compile and run `simulation_4fields_artificial.cpp`.  
+The script reads `2D_solutions_omega_0.45.txt`. Output snapshots are saved in `Data/`.
+
+#### 3. Perform Floquet stability analysis
 
     cd ideal_structure/Floquet
     python 2HDM-2D-Floquet.py         # computes eigenvalues and plots Floquet multipliers
 
 For 3D, use `2HDM-3D-Floquet.py`.
 
-### 5. Visualize results
+#### 4. Visualize results
 
 - **GIF animation**: `cd ideal_structure/plot && python plot_gif.py`
-
 ---
 
 ## ⏱️ Performance Notes & Running Long Simulations
@@ -149,16 +140,6 @@ but with less accuracy
          mpic++ -O3 -std=c++11 C++/mpi_2HDM_random_initial_3D.cpp -o dw_3d
          mpirun -np 32 ./dw_3d
 
-### 📥 Pre‑computed Data (Optional)
-
-If you only need to reproduce the figures, you can download pre‑computed simulation data from [Zenodo/Figshare link] instead of running the time‑consuming simulations yourself. This data includes:
-- Domain wall decay trajectories for various seeds.
-- Oscillon profiles for multiple frequencies.
-- Floquet eigenvalues and eigenvectors.
-
-<!-- Replace the link with actual DOI/URL when available -->
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.xxxxxxx.svg)](https://doi.org/10.5281/zenodo.xxxxxxx)
-
 ---
 
 ## 📊 Reproducing Paper Figures
@@ -189,7 +170,8 @@ If you only need to reproduce the figures, you can download pre‑computed simul
 
 For high‑performance runs (especially 3D), compile the C++ code with MPI support:
 
-    mpic++ -O3 -std=c++11 C++/mpi_2HDM_random_initial_2D.cpp -o dw_2hdm
+    cd natural_evolution
+    mpic++ -O3 -std=c++11 2HDM_random_initial_2D.cpp -o dw_2hdm
     mpirun -np 4 ./dw_2hdm
 
 **Note**: The MPI versions currently use **1D domain decomposition** (x‑direction). For 3D, a 2D decomposition would be more efficient but is not implemented. Use the serial versions for moderate grid sizes.
