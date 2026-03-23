@@ -1,665 +1,24 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+2HDM-2D-Floquet.py
 
+Floquet stability analysis for the full 2HDM oscillon solution in 2D polar coordinates.
+This script solves the background profiles f₀(r) and f₁(r) for the oscillon in the
+Z₂-symmetric two-Higgs-doublet model (2HDM) with 8 real scalar fields. It then
+constructs the linearized evolution operator (including a sponge absorbing layer)
+and computes the monodromy matrix via high‑precision time integration. The Floquet
+multipliers are computed and plotted to assess linear stability.
 
+The parameters correspond to the radiation‑free choice discussed in the paper,
+with λ₁ = λ₂ = λ₃/2, λ₄ = -|λ₅|, and all masses set to 200 GeV (see Appendix 2).
 
-
-
-
-
-# import numpy as np
-# import scipy.sparse as sp
-# import scipy.sparse.linalg as spla
-# import matplotlib.pyplot as plt
-# from scipy.integrate import solve_ivp
-# from scipy.optimize import fsolve
-# import warnings
-# warnings.filterwarnings('ignore')
-
-# # ================================
-# # 1. System Parameters and Background Solution
-# # ================================
-# class EightFieldOscillonSystem:
-#     def __init__(self):
-#         # Physical parameters - from your theory
-#         self.mu1 = 0.5    # μ₁²
-#         self.mu2 = 0.5    # μ₂², assuming same as μ₁
-        
-#         # Coupling constants with conditions: λ₁=λ₂=λ₃/2 and λ₄+|λ₅|=0
-#         self.lam3 = 3.56   # λ₃
-#         self.lam1 = self.lam3 / 2.0  # λ₁ = λ₃/2
-#         self.lam2 = self.lam3 / 2.0  # λ₂ = λ₃/2
-        
-#         # Condition: λ₄ + |λ₅| = 0, so λ₄ = -|λ₅|
-#         self.lam4 = -2.56
-#         self.lam5_abs = 2.56  # |λ₅|
-        
-#         # Frequency of oscillon
-#         self.omega = 0.45
-        
-#         # Spatial parameters - only positive x direction [0, L]
-#         self.L = 32.0          # Domain size
-#         self.Nr = 201          # Reduced for faster computation
-#         self.r = np.linspace(0, self.L, self.Nr)
-#         self.dr = self.r[1] - self.r[0]
-        
-#         # Time period
-#         self.T = 2 * np.pi / self.omega
-        
-#         # Number of fields
-#         self.n_fields = 8      # ψ₁ through ψ₈
-        
-#         # Total degrees of freedom
-#         self.total_dof = self.n_fields * self.Nr
-        
-#         # Solve for background fields f₀ and f₁ (using your code exactly)
-#         self.f0, self.f1, self.r, self.f0_solution, self.f1_solution = self._solve_background_fields()
-        
-#         # 保存径向最大半径
-#         self.R_max = 32.0
-        
-#         # Phase angle α - from background solution form
-#         self.alpha = 0.0  # Simplified assumption
-        
-#         # Construct derivative matrix with proper boundary conditions
-#         # Using 2D polar coordinates Laplacian
-#         self.D2 = self._build_2d_polar_laplacian()
-        
-#         # Verify background solution
-#         self._verify_background()
-    
-#     def _solve_background_fields(self):
-#         """Solve for background fields f₀ and f₁ using the given equations"""
-#         print("Solving background fields f₀ and f₁...")
-        
-#         # 2D Polar Coordinates (your exact code)
-#         R = 32.0  # Maximum radius
-#         N = 320   # Radial grid points
-#         dr = R / N
-#         r = np.linspace(0, R, N+1)
-        
-#         # Avoid division by zero at r=0
-#         r_safe = r.copy()
-#         r_safe[0] = 1e-11
-        
-#         def background_equations(y):
-#             f0 = y[0:N+1]
-#             f1 = y[N+1:2*(N+1)]
-#             res0 = np.zeros(N+1)
-#             res1 = np.zeros(N+1)
-            
-#             # For f0: ∇²f = f'' + (1/r)f' in 2D polar coordinates
-#             for i in range(0, N+1):
-#                 if i == 0:
-#                     laplacian_f0 = 2 * (f0[1] - f0[0]) / dr**2
-#                 elif i == N:
-#                     laplacian_f0 = (2 * f0[N-1] - 2 * f0[N]) / dr**2
-#                 else:
-#                     second_deriv = (f0[i-1] - 2*f0[i] + f0[i+1]) / dr**2
-#                     first_deriv = (f0[i+1] - f0[i-1]) / (2 * dr)
-#                     laplacian_f0 = second_deriv + (1 / r_safe[i]) * first_deriv
-                
-#                 # Using your equation with 8λ₄
-#                 nonlinear_f0 = self.mu1 * f0[i] - 2*self.lam3 * f0[i] * (2 * f0[i]**2 + 2 * f1[i]**2) + 4 * self.lam4 * f0[i] * (-f0[i]**2 + f1[i]**2)
-#                 res0[i] = laplacian_f0 + nonlinear_f0
-            
-#             # For f1: similar but with ω² term
-#             for i in range(0, N+1):
-#                 if i == 0:
-#                     laplacian_f1 = 2 * (f1[1] - f1[0]) / dr**2
-#                 elif i == N:
-#                     laplacian_f1 = (2 * f1[N-1] - 2 * f1[N]) / dr**2
-#                 else:
-#                     second_deriv = (f1[i-1] - 2*f1[i] + f1[i+1]) / dr**2
-#                     first_deriv = (f1[i+1] - f1[i-1]) / (2 * dr)
-#                     laplacian_f1 = second_deriv + (1 / r_safe[i]) * first_deriv
-                
-#                 nonlinear_f1 = self.omega**2 * f1[i] + self.mu1 * f1[i] - 2*self.lam3 * f1[i] * (2 * f0[i]**2 + 2 * f1[i]**2) - 4 * self.lam4 * f1[i] * (-f0[i]**2 + f1[i]**2)
-#                 res1[i] = laplacian_f1 + nonlinear_f1
-            
-#             return np.concatenate([res0, res1])
-        
-#         # Initial guess - your exact guess
-#         f0_initial = (1+np.tanh((r-4.5)/2))*0.2
-#         f1_initial = (1-np.tanh((r-4.5)/2))*0.25
-#         y_initial = np.concatenate([f0_initial, f1_initial])
-        
-#         print("Solving nonlinear equations for f₀ and f₁...")
-#         solution = fsolve(background_equations, y_initial, xtol=1e-10, maxfev=2000000)
-#         print("Background solution found!")
-        
-#         # Extract solutions
-#         f0_solution = solution[0:N+1]
-#         f1_solution = solution[N+1:2*(N+1)]
-        
-#         # Interpolate to our x grid
-#         f0 = np.interp(self.r, r, f0_solution)
-#         f1 = np.interp(self.r, r, f1_solution)
-        
-#         # Return both the interpolated and original solutions
-#         return f0, f1, r, f0_solution, f1_solution
-    
-#     def _build_2d_polar_laplacian(self):
-#         """Construct 2D polar Laplacian operator"""
-#         N = self.Nr
-#         r = self.r.copy()
-#         r[0] = 1e-11  # Avoid division by zero
-        
-#         # Initialize matrix
-#         D2 = sp.lil_matrix((N, N), dtype=np.complex128)
-        
-#         # Construct 2D polar Laplacian: ∇² = ∂²/∂r² + (1/r) ∂/∂r
-#         for i in range(N):
-#             if i == 0:
-#                 # At r=0: use expansion f(r) = f(0) + (1/2)f''(0)r² + ...
-#                 # ∇²f = 2(f(1) - f(0))/dr²
-#                 D2[0, 0] = -2.0 / (self.dr**2)
-#                 D2[0, 1] = 2.0 / (self.dr**2)
-#             elif i == N-1:
-#                 # At r=L: use one-sided derivative with Neumann boundary
-#                 D2[-1, -1] = -2.0 / (self.dr**2)
-#                 D2[-1, -2] = 2.0 / (self.dr**2)
-#             else:
-#                 # Interior points: standard finite difference for 2D polar
-#                 # ∂²f/∂r² ≈ (f(i-1) - 2f(i) + f(i+1))/dr²
-#                 second_deriv = 1.0 / (self.dr**2)
-                
-#                 # (1/r) ∂f/∂r ≈ (1/r(i)) * (f(i+1) - f(i-1))/(2dr)
-#                 if r[i] > 0:
-#                     first_deriv_coeff = 1.0 / (2 * r[i] * self.dr)
-#                 else:
-#                     first_deriv_coeff = 0.0
-                
-#                 D2[i, i-1] = second_deriv - first_deriv_coeff
-#                 D2[i, i] = -2.0 * second_deriv
-#                 D2[i, i+1] = second_deriv + first_deriv_coeff
-        
-#         return D2.tocsr()
-    
-#     def _verify_background(self):
-#         """Verify the background solution"""
-#         print("\nBackground solution verification:")
-#         print(f"  f₀ range: [{np.min(self.f0):.6f}, {np.max(self.f0):.6f}]")
-#         print(f"  f₁ range: [{np.min(self.f1):.6f}, {np.max(self.f1):.6f}]")
-#         print(f"  Center: f₀(0)={self.f0[0]:.6f}, f₁(0)={self.f1[0]:.6f}")
-#         print(f"  Boundary: f₀(L)={self.f0[-1]:.6f}, f₁(L)={self.f1[-1]:.6f}")
-    
-#     def background_fields(self, t):
-#         """Calculate background fields at time t"""
-#         cos_wt = np.cos(self.omega * t)
-#         sin_wt = np.sin(self.omega * t)
-        
-#         # Initialize all 8 fields
-#         phi = np.zeros((self.n_fields, self.Nr), dtype=np.complex128)
-        
-#         # According to the background solution form:
-#         phi[0, :] = self.f0 * np.cos(self.alpha) + self.f1 * cos_wt     # ψ₁
-#         phi[1, :] = -self.f0 * np.cos(self.alpha) + self.f1 * cos_wt   # ψ₂
-#         phi[2, :] = self.f0 * np.cos(self.alpha) - self.f1 * cos_wt    # ψ₃
-#         phi[3, :] = -self.f0 * np.cos(self.alpha) - self.f1 * cos_wt   # ψ₄
-#         phi[4, :] = -self.f0 * np.sin(self.alpha) - self.f1 * sin_wt   # ψ₅
-#         phi[5, :] = self.f0 * np.sin(self.alpha) - self.f1 * sin_wt    # ψ₆
-#         phi[6, :] = self.f0 * np.sin(self.alpha) + self.f1 * sin_wt    # ψ₇
-#         phi[7, :] = -self.f0 * np.sin(self.alpha) + self.f1 * sin_wt   # ψ₈
-        
-#         return phi
-    
-#     def compute_potential_jacobian(self, t):
-#         """Compute Jacobian matrix of the potential part for linearization"""
-#         phi = self.background_fields(t)  # Shape: (8, Nr)
-        
-#         # Extract all fields
-#         psi = phi  # psi[0] = ψ₁, psi[1] = ψ₂, ..., psi[7] = ψ₈
-        
-#         # Initialize Jacobian matrix J(t,x) - shape: (8, 8, Nr)
-#         J = np.zeros((self.n_fields, self.n_fields, self.Nr), dtype=np.complex128)
-        
-#         # Parameters
-#         mu1, mu2 = self.mu1, self.mu2
-#         lam1, lam2, lam3 = self.lam1, self.lam2, self.lam3
-#         lam4 = self.lam4
-#         lam5_abs = self.lam5_abs
-        
-#         # Note: λ₄ - |λ₅| = 2λ₄ (since λ₄ + |λ₅| = 0)
-#         lam4_minus_lam5 = 2 * lam4
-        
-#         # For each spatial point
-#         for k in range(self.Nr):
-#             # Field values at point k
-#             p = psi[:, k]  # p[0] = ψ₁, ..., p[7] = ψ₈
-            
-#             # Calculate combinations for this point
-#             # Ψ₁†Ψ₁ = ψ₁² + ψ₃² + ψ₅² + ψ₇²
-#             sum1 = p[0]**2 + p[2]**2 + p[4]**2 + p[6]**2
-            
-#             # Ψ₂†Ψ₂ = ψ₂² + ψ₄² + ψ₆² + ψ₈²
-#             sum2 = p[1]**2 + p[3]**2 + p[5]**2 + p[7]**2
-            
-#             # Re(Ψ₁†Ψ₂) = ψ₁ψ₂ + ψ₅ψ₆ + ψ₃ψ₄ + ψ₇ψ₈
-#             re_cross = p[0]*p[1] + p[4]*p[5] + p[2]*p[3] + p[6]*p[7]
-            
-#             # Now compute Jacobian elements
-#             # For each field i, we need ∂V/∂ψ_i
-            
-#             # Field indices: 0=ψ₁, 1=ψ₂, 2=ψ₃, 3=ψ₄, 4=ψ₅, 5=ψ₆, 6=ψ₇, 7=ψ₈
-            
-#             # ∂V/∂ψ₁
-#             J[0, 0, k] = mu1 - 2*lam1*(3*p[0]**2 + p[2]**2 + p[4]**2 + p[6]**2 + sum1) - lam3*sum2 - lam4_minus_lam5*p[1]**2
-#             J[0, 1, k] = -4*lam1*p[0]*p[1] - lam4_minus_lam5*(re_cross + p[0]*p[1])
-#             J[0, 2, k] = -4*lam1*p[0]*p[2] - lam4_minus_lam5*p[1]*p[3]
-#             J[0, 3, k] = -4*lam1*p[0]*p[3] - lam4_minus_lam5*p[1]*p[2]
-#             J[0, 4, k] = -4*lam1*p[0]*p[4] - lam4_minus_lam5*p[1]*p[5]
-#             J[0, 5, k] = -4*lam1*p[0]*p[5] - lam4_minus_lam5*p[1]*p[4]
-#             J[0, 6, k] = -4*lam1*p[0]*p[6] - lam4_minus_lam5*p[1]*p[7]
-#             J[0, 7, k] = -4*lam1*p[0]*p[7] - lam4_minus_lam5*p[1]*p[6]
-            
-#             # ∂V/∂ψ₂ (symmetric with respect to ψ₁↔ψ₂, with μ₂, λ₂ instead of μ₁, λ₁)
-#             J[1, 0, k] = -4*lam2*p[1]*p[0] - lam4_minus_lam5*(re_cross + p[0]*p[1])
-#             J[1, 1, k] = mu2 - 2*lam2*(3*p[1]**2 + p[3]**2 + p[5]**2 + p[7]**2 + sum2) - lam3*sum1 - lam4_minus_lam5*p[0]**2
-#             J[1, 2, k] = -4*lam2*p[1]*p[2] - lam4_minus_lam5*p[0]*p[3]
-#             J[1, 3, k] = -4*lam2*p[1]*p[3] - lam4_minus_lam5*p[0]*p[2]
-#             J[1, 4, k] = -4*lam2*p[1]*p[4] - lam4_minus_lam5*p[0]*p[5]
-#             J[1, 5, k] = -4*lam2*p[1]*p[5] - lam4_minus_lam5*p[0]*p[4]
-#             J[1, 6, k] = -4*lam2*p[1]*p[6] - lam4_minus_lam5*p[0]*p[7]
-#             J[1, 7, k] = -4*lam2*p[1]*p[7] - lam4_minus_lam5*p[0]*p[6]
-            
-#             # ∂V/∂ψ₃ (similar to ψ₁ but with indices 2 and 0 swapped in some terms)
-#             J[2, 0, k] = -4*lam1*p[2]*p[0] - lam4_minus_lam5*p[3]*p[1]
-#             J[2, 1, k] = -4*lam1*p[2]*p[1] - lam4_minus_lam5*p[3]*p[0]
-#             J[2, 2, k] = mu1 - 2*lam1*(p[0]**2 + 3*p[2]**2 + p[4]**2 + p[6]**2 + sum1) - lam3*sum2 - lam4_minus_lam5*p[3]**2
-#             J[2, 3, k] = -4*lam1*p[2]*p[3] - lam4_minus_lam5*(re_cross + p[2]*p[3])
-#             J[2, 4, k] = -4*lam1*p[2]*p[4] - lam4_minus_lam5*p[3]*p[5]
-#             J[2, 5, k] = -4*lam1*p[2]*p[5] - lam4_minus_lam5*p[3]*p[4]
-#             J[2, 6, k] = -4*lam1*p[2]*p[6] - lam4_minus_lam5*p[3]*p[7]
-#             J[2, 7, k] = -4*lam1*p[2]*p[7] - lam4_minus_lam5*p[3]*p[6]
-            
-#             # ∂V/∂ψ₄ (similar to ψ₂ but with indices 3 and 1 swapped)
-#             J[3, 0, k] = -4*lam2*p[3]*p[0] - lam4_minus_lam5*p[2]*p[1]
-#             J[3, 1, k] = -4*lam2*p[3]*p[1] - lam4_minus_lam5*p[2]*p[0]
-#             J[3, 2, k] = -4*lam2*p[3]*p[2] - lam4_minus_lam5*(re_cross + p[2]*p[3])
-#             J[3, 3, k] = mu2 - 2*lam2*(p[1]**2 + 3*p[3]**2 + p[5]**2 + p[7]**2 + sum2) - lam3*sum1 - lam4_minus_lam5*p[2]**2
-#             J[3, 4, k] = -4*lam2*p[3]*p[4] - lam4_minus_lam5*p[2]*p[5]
-#             J[3, 5, k] = -4*lam2*p[3]*p[5] - lam4_minus_lam5*p[2]*p[4]
-#             J[3, 6, k] = -4*lam2*p[3]*p[6] - lam4_minus_lam5*p[2]*p[7]
-#             J[3, 7, k] = -4*lam2*p[3]*p[7] - lam4_minus_lam5*p[2]*p[6]
-            
-#             # ∂V/∂ψ₅ (similar to ψ₁ but for imaginary parts)
-#             J[4, 0, k] = -4*lam1*p[4]*p[0] - lam4_minus_lam5*p[5]*p[1]
-#             J[4, 1, k] = -4*lam1*p[4]*p[1] - lam4_minus_lam5*p[5]*p[0]
-#             J[4, 2, k] = -4*lam1*p[4]*p[2] - lam4_minus_lam5*p[5]*p[3]
-#             J[4, 3, k] = -4*lam1*p[4]*p[3] - lam4_minus_lam5*p[5]*p[2]
-#             J[4, 4, k] = mu1 - 2*lam1*(p[0]**2 + p[2]**2 + 3*p[4]**2 + p[6]**2 + sum1) - lam3*sum2 - lam4_minus_lam5*p[5]**2
-#             J[4, 5, k] = -4*lam1*p[4]*p[5] - lam4_minus_lam5*(re_cross + p[4]*p[5])
-#             J[4, 6, k] = -4*lam1*p[4]*p[6] - lam4_minus_lam5*p[5]*p[7]
-#             J[4, 7, k] = -4*lam1*p[4]*p[7] - lam4_minus_lam5*p[5]*p[6]
-            
-#             # ∂V/∂ψ₆ (similar to ψ₂ but for imaginary parts)
-#             J[5, 0, k] = -4*lam2*p[5]*p[0] - lam4_minus_lam5*p[4]*p[1]
-#             J[5, 1, k] = -4*lam2*p[5]*p[1] - lam4_minus_lam5*p[4]*p[0]
-#             J[5, 2, k] = -4*lam2*p[5]*p[2] - lam4_minus_lam5*p[4]*p[3]
-#             J[5, 3, k] = -4*lam2*p[5]*p[3] - lam4_minus_lam5*p[4]*p[2]
-#             J[5, 4, k] = -4*lam2*p[5]*p[4] - lam4_minus_lam5*(re_cross + p[4]*p[5])
-#             J[5, 5, k] = mu2 - 2*lam2*(p[1]**2 + p[3]**2 + 3*p[5]**2 + p[7]**2 + sum2) - lam3*sum1 - lam4_minus_lam5*p[4]**2
-#             J[5, 6, k] = -4*lam2*p[5]*p[6] - lam4_minus_lam5*p[4]*p[7]
-#             J[5, 7, k] = -4*lam2*p[5]*p[7] - lam4_minus_lam5*p[4]*p[6]
-            
-#             # ∂V/∂ψ₇ (similar to ψ₁)
-#             J[6, 0, k] = -4*lam1*p[6]*p[0] - lam4_minus_lam5*p[7]*p[1]
-#             J[6, 1, k] = -4*lam1*p[6]*p[1] - lam4_minus_lam5*p[7]*p[0]
-#             J[6, 2, k] = -4*lam1*p[6]*p[2] - lam4_minus_lam5*p[7]*p[3]
-#             J[6, 3, k] = -4*lam1*p[6]*p[3] - lam4_minus_lam5*p[7]*p[2]
-#             J[6, 4, k] = -4*lam1*p[6]*p[4] - lam4_minus_lam5*p[7]*p[5]
-#             J[6, 5, k] = -4*lam1*p[6]*p[5] - lam4_minus_lam5*p[7]*p[4]
-#             J[6, 6, k] = mu1 - 2*lam1*(p[0]**2 + p[2]**2 + p[4]**2 + 3*p[6]**2 + sum1) - lam3*sum2 - lam4_minus_lam5*p[7]**2
-#             J[6, 7, k] = -4*lam1*p[6]*p[7] - lam4_minus_lam5*(re_cross + p[6]*p[7])
-            
-#             # ∂V/∂ψ₈ (similar to ψ₂)
-#             J[7, 0, k] = -4*lam2*p[7]*p[0] - lam4_minus_lam5*p[6]*p[1]
-#             J[7, 1, k] = -4*lam2*p[7]*p[1] - lam4_minus_lam5*p[6]*p[0]
-#             J[7, 2, k] = -4*lam2*p[7]*p[2] - lam4_minus_lam5*p[6]*p[3]
-#             J[7, 3, k] = -4*lam2*p[7]*p[3] - lam4_minus_lam5*p[6]*p[2]
-#             J[7, 4, k] = -4*lam2*p[7]*p[4] - lam4_minus_lam5*p[6]*p[5]
-#             J[7, 5, k] = -4*lam2*p[7]*p[5] - lam4_minus_lam5*p[6]*p[4]
-#             J[7, 6, k] = -4*lam2*p[7]*p[6] - lam4_minus_lam5*(re_cross + p[6]*p[7])
-#             J[7, 7, k] = mu2 - 2*lam2*(p[1]**2 + p[3]**2 + p[5]**2 + 3*p[7]**2 + sum2) - lam3*sum1 - lam4_minus_lam5*p[6]**2
-        
-#         return J
-
-# # ================================
-# # 2. Floquet Analyzer for 8-Field System
-# # ================================
-# class EightFieldFloquetAnalyzer:
-#     def __init__(self, system):
-#         self.system = system
-#         self.Nr = system.Nr
-#         self.n_fields = system.n_fields
-#         self.total_dof = system.total_dof
-    
-#     def build_linear_operator(self, t):
-#         """Build linear operator L(t) = D2 ⊗ I + J(t) for 8 fields"""
-#         # Spatial derivative part: block diagonal with 2D polar Laplacian
-#         D_list = [self.system.D2 for _ in range(self.n_fields)]
-#         D_block = sp.block_diag(D_list, format='csr', dtype=np.complex128)
-        
-#         # Potential Jacobian part
-#         J_tx = self.system.compute_potential_jacobian(t)
-        
-#         # Construct sparse J_block
-#         rows, cols, data = [], [], []
-#         for k in range(self.Nr):
-#             for i in range(self.n_fields):
-#                 for j in range(self.n_fields):
-#                     val = J_tx[i, j, k]
-#                     if abs(val) > 1e-12:
-#                         row_idx = i * self.Nr + k
-#                         col_idx = j * self.Nr + k
-#                         rows.append(row_idx)
-#                         cols.append(col_idx)
-#                         data.append(val)
-        
-#         J_block = sp.coo_matrix((data, (rows, cols)), 
-#                                shape=(self.total_dof, self.total_dof),
-#                                dtype=np.complex128).tocsr()
-        
-#         # Complete linear operator
-#         L = D_block + J_block
-        
-#         return L
-    
-#     def compute_monodromy_matrix(self, n_time_samples=10):
-#         """Compute monodromy matrix efficiently"""
-#         T = self.system.T
-#         dim = 2 * self.total_dof
-        
-#         print(f"Computing monodromy matrix, dimension: {dim}")
-#         print(f"Using {n_time_samples} time samples")
-        
-#         # Precompute linear operators at different times
-#         times = np.linspace(0, T, n_time_samples)
-#         L_operators = [self.build_linear_operator(t) for t in times]
-        
-#         # Initialize monodromy matrix as identity
-#         M = np.eye(dim, dtype=np.complex128)
-        
-#         # Only compute first few columns (enough for 100 eigenvalues)
-#         max_columns = min(200, dim // 5)
-#         print(f"Computing first {max_columns} columns for eigenvalue calculation")
-        
-#         for col in range(max_columns):
-#             if col % 20 == 0:
-#                 print(f"  Processing column {col}/{max_columns}")
-            
-#             y0 = M[:, col]
-            
-#             # Define ODE right-hand side
-#             def ode_rhs(t, y):
-#                 # Find nearest time sample
-#                 idx = min(int(t / T * (n_time_samples - 1)), n_time_samples - 2)
-#                 t1 = times[idx]
-#                 t2 = times[idx + 1]
-                
-#                 # Linear interpolation weight
-#                 alpha = (t - t1) / (t2 - t1) if t2 > t1 else 0
-                
-#                 # Interpolate linear operator
-#                 if alpha < 0.5:
-#                     L = L_operators[idx]
-#                 else:
-#                     L = L_operators[idx + 1]
-                
-#                 # Extract position and velocity components
-#                 q = y[:self.total_dof]
-#                 p = y[self.total_dof:]
-                
-#                 # Second-order system to first-order
-#                 dq_dt = p
-#                 dp_dt = L.dot(q)
-                
-#                 return np.concatenate([dq_dt, dp_dt])
-            
-#             # High-precision integration
-#             sol = solve_ivp(ode_rhs, [0, T], y0,
-#                           method='RK45',
-#                           rtol=1e-8,
-#                           atol=1e-10,
-#                           max_step=T/500)
-            
-#             M[:, col] = sol.y[:, -1]
-        
-#         return M
-    
-#     def compute_stability(self, num_eigenvalues=100):
-#         """Compute Floquet stability with specified number of eigenvalues"""
-#         print(f"\nComputing monodromy matrix for {num_eigenvalues} eigenvalues...")
-#         M = self.compute_monodromy_matrix()
-        
-#         print(f"\nComputing {num_eigenvalues} eigenvalues...")
-#         # Compute eigenvalues
-#         M_sparse = sp.csr_matrix(M)
-#         eigenvalues, eigenvectors = spla.eigs(M_sparse, k=num_eigenvalues,
-#                                             which='LM',  # Largest magnitude
-#                                             return_eigenvectors=True,
-#                                             maxiter=10000,
-#                                             tol=1e-8)
-        
-#         # Compute Floquet exponents
-#         T = self.system.T
-#         exponents = np.log(eigenvalues) / T
-        
-#         # Analyze results
-#         unstable_mask = np.abs(eigenvalues) > 1.0 + 1e-6
-#         num_unstable = np.sum(unstable_mask)
-        
-#         results = {
-#             'multipliers': eigenvalues,
-#             'exponents': exponents,
-#             'eigenvectors': eigenvectors,
-#             'num_unstable': num_unstable,
-#             'unstable_indices': np.where(unstable_mask)[0],
-#             'total_modes': len(eigenvalues)
-#         }
-        
-#         if num_unstable > 0:
-#             growth_rates = np.real(exponents[unstable_mask])
-#             results['max_growth_rate'] = np.max(growth_rates)
-#             results['avg_growth_rate'] = np.mean(growth_rates)
-#         else:
-#             results['max_growth_rate'] = 0.0
-#             results['avg_growth_rate'] = 0.0
-        
-#         return results
-
-# # ================================
-# # 3. Plot Functions (Paper Format)
-# # ================================
-# def plot_background_fields(system):
-#     """Plot background fields f0 and f1 in 2D polar coordinates"""
-#     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    
-#     # Plot f0
-#     ax1.plot(system.r, system.f0_solution, 'b-', linewidth=2)
-#     ax1.set_xlabel('Radial coordinate r', fontsize=12)
-#     ax1.set_ylabel('Field amplitude f₀(r)', fontsize=12)
-#     ax1.set_title('Background field f₀(r) in 2D', fontsize=14)
-#     ax1.grid(True, alpha=0.3)
-#     ax1.set_xlim([0, system.R_max/2])
-    
-#     # Plot f1
-#     ax2.plot(system.r, system.f1_solution, 'r-', linewidth=2)
-#     ax2.set_xlabel('Radial coordinate r', fontsize=12)
-#     ax2.set_ylabel('Field amplitude f₁(r)', fontsize=12)
-#     ax2.set_title('Background field f₁(r) in 2D', fontsize=14)
-#     ax2.grid(True, alpha=0.3)
-#     ax2.set_xlim([0, system.R_max/2])
-    
-#     plt.tight_layout()
-#     plt.savefig('background_fields_2d.png', dpi=150, bbox_inches='tight')
-#     plt.show()
-
-# def create_paper_format_plots(system, eigenvalues):
-#     """Create publication-quality plots for 2D polar coordinates - only top row"""
-    
-#     # Create figure with only 2 subplots (top row)
-#     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    
-#     # Plot 1: Unit circle plot
-#     theta = np.linspace(0, 2*np.pi, 200)
-#     ax1.plot(np.cos(theta), np.sin(theta), 'k-', linewidth=1.0, alpha=0.7, label='Unit circle')
-    
-#     # Separate stable and unstable eigenvalues
-#     moduli = np.abs(eigenvalues)
-#     stable_mask = moduli <= 0.9999
-#     one_mask =  (moduli > 0.9999) & (moduli < 1.0001)
-#     unstable_mask = moduli > 1.0001
-    
-#     stable_eigenvalues = eigenvalues[stable_mask]
-#     one_eigenvalues = eigenvalues[one_mask]
-#     unstable_eigenvalues = eigenvalues[unstable_mask]
-    
-#     ax1.scatter(np.real(stable_eigenvalues), np.imag(stable_eigenvalues), 
-#                 c='blue', alpha=0.7, edgecolors='none', s=50, label=f'Stable(|ρ|<1): {len(stable_eigenvalues)}')
-
-
-#     ax1.scatter(np.real(one_eigenvalues), np.imag(one_eigenvalues), 
-#                 c='red', alpha=0.9, edgecolors='none', s=50, label=f'stable(|ρ|=1): {len(one_eigenvalues)}')
-    
-
-#     ax1.scatter(np.real(unstable_eigenvalues), np.imag(unstable_eigenvalues), 
-#                 c='red', alpha=0.9, edgecolors='none', s=70, marker='^', label=f'Unstable(|ρ|>1): {len(unstable_eigenvalues)}')
-    
-#     ax1.set_xlabel('Re(ρ)', fontsize=14)
-#     ax1.set_ylabel('Im(ρ)', fontsize=14)
-#     ax1.set_title('Floquet Multipliers (2D Polar Coordinates)', fontsize=16)
-#     ax1.legend(loc='upper right', fontsize=10)
-#     ax1.grid(True, alpha=0.3, linestyle='--')
-#     ax1.axis('equal')
-#     ax1.set_xlim([-1.5, 1.5])
-#     ax1.set_ylim([-1.5, 1.5])
-    
-#     # Plot 2: Histogram of eigenvalue moduli
-#     bins = np.linspace(0, max(2, np.max(moduli)*1.1), 30)
-#     n, bins, patches = ax2.hist(moduli, bins=bins, alpha=0.7, color='steelblue', 
-#                                edgecolor='black', linewidth=0.5)
-    
-#     # Color unstable region
-#     for i, patch in enumerate(patches):
-#         if bins[i] > 1.0:
-#             patch.set_facecolor('lightcoral')
-#             patch.set_alpha(0.8)
-    
-#     # Add stability threshold line
-#     # ax2.axvline(x=1.0, color='red', linestyle='--', linewidth=2, alpha=0.8, label='Stability threshold')
-    
-#     ax2.set_xlabel('|ρ|', fontsize=14)
-#     ax2.set_ylabel('Frequency', fontsize=14)
-#     ax2.set_title('Distribution of Floquet Multiplier Moduli', fontsize=16)
-#     # ax2.legend(loc='upper right', fontsize=10)
-#     ax2.grid(True, alpha=0.3, linestyle='--')
-    
-#     # Add statistics text to histogram plot
-#     stats_text = f'Total eigenvalues: {len(eigenvalues)}\n'
-#     stats_text += f'Stable (|ρ| < 1): {len(stable_eigenvalues)}\n'
-#     stats_text += f'Stable (|ρ| = 1): {len(one_eigenvalues)}\n'
-#     stats_text += f'Unstable (|ρ| > 1): {len(unstable_eigenvalues)}'
-    
-#     ax2.text(0.65, 0.95, stats_text, transform=ax2.transAxes,
-#             fontsize=10, verticalalignment='top',
-#             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray'))
-    
-#     plt.tight_layout()
-#     # plt.savefig('floquet_analysis_2d_simple.pdf', dpi=300)
-#     plt.savefig('floquet_analysis_2d_simple.png', dpi=300)
-    
-#     print(f"\nAnalysis completed:")
-#     print(f"  Total eigenvalues analyzed: {len(eigenvalues)}")
-#     print(f"  Stable eigenvalues (|ρ| < 1): {len(stable_eigenvalues)}")
-#     print(f"  Stable eigenvalues (|ρ| = 1): {len(one_eigenvalues)}")
-#     print(f"  Unstable eigenvalues (|ρ| > 1): {len(unstable_eigenvalues)}")
-#     if len(unstable_eigenvalues) > 0:
-#         print(f"  Maximum modulus: {np.max(moduli):.3f}")
-    
-#     plt.show()
-
-
-
-
-
-
-
-
-
-# # ================================
-# # 4. Main Program
-# # ================================
-# def main():
-#     print("=" * 70)
-#     print("EIGHT-FIELD OSCILLON SYSTEM - FLOQUET STABILITY ANALYSIS")
-#     print("=" * 70)
-    
-#     # 1. Initialize system and solve background
-#     print("\n1. Initializing system and solving background...")
-#     system = EightFieldOscillonSystem()
-    
-#     # 2. Plot background fields first
-#     print("\n2. Plotting background fields...")
-#     plot_background_fields(system)
-    
-#     # 3. Create analyzer
-#     print("\n3. Creating Floquet analyzer...")
-#     analyzer = EightFieldFloquetAnalyzer(system)
-    
-#     # 4. Compute stability with 100 eigenvalues
-#     print("\n4. Computing stability with 100 eigenvalues...")
-#     results = analyzer.compute_stability(num_eigenvalues=100)
-    
-#     # 5. Display results
-#     print("\n" + "=" * 70)
-#     print("RESULTS")
-#     print("=" * 70)
-#     print(f"Modes analyzed: {results['total_modes']}")
-#     print(f"Stable modes: {results['total_modes'] - results['num_unstable']}")
-#     print(f"Unstable modes: {results['num_unstable']}")
-    
-#     if results['num_unstable'] > 0:
-#         print(f"Maximum growth rate: {results.get('max_growth_rate', 0):.6f}")
-#         print(f"Average growth rate: {results.get('avg_growth_rate', 0):.6f}")
-        
-#         # Show most unstable modes
-#         print("\nMost unstable modes:")
-#         growth_rates = np.real(results['exponents'])
-#         sorted_idx = np.argsort(-growth_rates)[:5]
-#         for i, idx in enumerate(sorted_idx):
-#             if growth_rates[idx] > 0:
-#                 growth = growth_rates[idx]
-#                 multiplier = results['multipliers'][idx]
-#                 print(f"  Mode {idx}: growth={growth:.6f}, |ρ|={np.abs(multiplier):.6f}")
-#     else:
-#         print("\nSystem is LINEARLY STABLE!")
-#         print("All Floquet multipliers are on or inside the unit circle.")
-    
-#     # 6. Generate paper format plots
-#     print("\n5. Generating paper format plots...")
-#     create_paper_format_plots(system, results['multipliers'])
-    
-#     print("\n" + "=" * 70)
-#     print("ANALYSIS COMPLETE")
-#     print("=" * 70)
-
-# # ================================
-# # 5. Run Program
-# # ================================
-# if __name__ == "__main__":
-#     # Run complete analysis
-#     main()
-
-
-
-
-
-
-
-
-
-
-
+Author: Zhaoyu Meng
+Date:   June 2025
+Paper:  Long-Lived Oscillons as Closed Domain Walls in the Z₂‑Symmetric Two‑Higgs‑Doublet Model
+        arXiv:2601.14676 [hep-ph]
+License: MIT (see LICENSE file)
+"""
 
 import numpy as np
 import scipy.sparse as sp
@@ -670,320 +29,224 @@ from scipy.optimize import fsolve
 import warnings
 warnings.filterwarnings('ignore')
 
-# ================================
+
+# =============================================================================
 # 1. System Parameters and Background Solution
-# ================================
+# =============================================================================
 class EightFieldOscillonSystem:
+    """
+    Defines the full 2HDM oscillon system in 2D polar coordinates.
+    Contains parameters, radial grid, background fields f0(r) and f1(r),
+    and the radial Laplacian operator.
+    """
+
     def __init__(self):
-        # Physical parameters - from your theory
-        self.mu1 = 0.5    # μ₁²
-        self.mu2 = 0.5    # μ₂², assuming same as μ₁
-        
-        # Coupling constants with conditions: λ₁=λ₂=λ₃/2 and λ₄+|λ₅|=0
-        self.lam3 = 3.56   # λ₃
-        self.lam1 = self.lam3 / 2.0  # λ₁ = λ₃/2
-        self.lam2 = self.lam3 / 2.0  # λ₂ = λ₃/2
-        
-        # Condition: λ₄ + |λ₅| = 0, so λ₄ = -|λ₅|
-        self.lam4 = -2.56
+        # Physical parameters (dimensionless, see Appendix 2)
+        self.mu1 = 0.5        # μ₁²
+        self.mu2 = 0.5        # μ₂² (equal in the radiation‑free case)
+
+        # Coupling constants satisfying λ₁ = λ₂ = λ₃/2 and λ₄ + |λ₅| = 0
+        self.lam3 = 3.56      # λ₃
+        self.lam1 = self.lam3 / 2.0
+        self.lam2 = self.lam3 / 2.0
+        self.lam4 = -2.56     # λ₄
         self.lam5_abs = 2.56  # |λ₅|
-        
-        # Frequency of oscillon
-        self.omega = 0.45
-        
-        # Spatial parameters - only positive x direction [0, L]
-        self.R_max = 32.0          # Domain size
-        self.Nr = 129          # Reduced for faster computation
+
+        self.omega = 0.45     # oscillon frequency (in units of m_h)
+
+        # Spatial grid (2D polar coordinates)
+        self.R_max = 32.0     # maximum radius [1/m_h]
+        self.Nr = 129         # number of radial points
         self.r = np.linspace(0, self.R_max, self.Nr)
         self.dr = self.r[1] - self.r[0]
-        
+
+        # Avoid division by zero at r=0
         self.r_safe = self.r.copy()
         self.r_safe[0] = 1e-10
+
         # Time period
         self.T = 2 * np.pi / self.omega
-        
-        # Number of fields
-        self.n_fields = 8      # ψ₁ through ψ₈
-        
-        # Total degrees of freedom
+
+        # Number of fields (8 real scalar fields)
+        self.n_fields = 8
         self.total_dof = self.n_fields * self.Nr
-        
-        # Solve for background fields f₀ and f₁ (using your code exactly)
+
+        # Solve background equations
         self.f0, self.f1 = self._solve_background_fields()
-        
-        
-        # Phase angle α - from background solution form
-        self.alpha = 0.0  # Simplified assumption
-        
-        # Construct derivative matrix with proper boundary conditions
-        # Using 2D polar coordinates Laplacian
+
+        # Phase angles (see Eq. (5.3) of the paper)
+        self.alpha1 = 0.5     # α (first doublet)
+        self.alpha2 = 0.2     # α (second doublet)
+        self.beta = 0.4       # β (mixing angle between doublets)
+        self.theta_alpha = 0.7  # θ_β (additional phase)
+
+        # Construct radial Laplacian matrix
         self.D2_2d = self._build_2d_polar_laplacian()
-        
+
         # Verify background solution
         self._verify_background()
-    
-    # def _solve_background_fields(self):
-    #     """Solve for background fields f₀ and f₁ using the given equations"""
-    #     print("Solving background fields f₀ and f₁...")
-        
-    #     # 2D Polar Coordinates (your exact code)
-    #     R = self.R_max  # Maximum radius
-    #     dr = self.Nr
-    #     r = self.r
-    #     N=self.Nr
-        
-    #     # Avoid division by zero at r=0
-    #     r_safe = self.r_safe
-        
-    #     def background_equations(y):
-    #         f0 = y[0:N]
-    #         f1 = y[N:2*(N)]
-    #         res0 = np.zeros(N)
-    #         res1 = np.zeros(N)
-            
-    #         # For f0: ∇²f = f'' + (1/r)f' in 2D polar coordinates
-    #         for i in range(0, N):
-    #             if i == 0:
-    #                 laplacian_f0 = 2 * (f0[1] - f0[0]) / dr**2
-    #             elif i == N:
-    #                 laplacian_f0 = (2 * f0[N-1] - 2 * f0[N]) / dr**2
-    #             else:
-    #                 second_deriv = (f0[i-1] - 2*f0[i] + f0[i+1]) / dr**2
-    #                 first_deriv = (f0[i+1] - f0[i-1]) / (2 * dr)
-    #                 laplacian_f0 = second_deriv + (1 / r_safe[i]) * first_deriv
-                
-    #             # Using your equation with 8λ₄
-    #             nonlinear_f0 = self.mu1 * f0[i] - 2*self.lam3 * f0[i] * (2 * f0[i]**2 + 2 * f1[i]**2) + 4 * self.lam4 * f0[i] * (-f0[i]**2 + f1[i]**2)
-    #             res0[i] = laplacian_f0 + nonlinear_f0
-            
-    #         # For f1: similar but with ω² term
-    #         for i in range(0, N):
-    #             if i == 0:
-    #                 laplacian_f1 = 2 * (f1[1] - f1[0]) / dr**2
-    #             elif i == N:
-    #                 laplacian_f1 = (2 * f1[N-1] - 2 * f1[N]) / dr**2
-    #             else:
-    #                 second_deriv = (f1[i-1] - 2*f1[i] + f1[i+1]) / dr**2
-    #                 first_deriv = (f1[i+1] - f1[i-1]) / (2 * dr)
-    #                 laplacian_f1 = second_deriv + (1 / r_safe[i]) * first_deriv
-                
-    #             nonlinear_f1 = self.omega**2 * f1[i] + self.mu1 * f1[i] - 2*self.lam3 * f1[i] * (2 * f0[i]**2 + 2 * f1[i]**2) - 4 * self.lam4 * f1[i] * (-f0[i]**2 + f1[i]**2)
-    #             res1[i] = laplacian_f1 + nonlinear_f1
-            
-    #         return np.concatenate([res0, res1])
-        
-    #     # Initial guess - your exact guess
-    #     f0_initial = (1+np.tanh((r-4.5)/2))*0.2
-    #     f1_initial = (1-np.tanh((r-4.5)/2))*0.25
-    #     y_initial = np.concatenate([f0_initial, f1_initial])
-        
-    #     print("Solving nonlinear equations for f₀ and f₁...")
-    #     solution = fsolve(background_equations, y_initial, xtol=1e-10, maxfev=2000000)
-    #     print("Background solution found!")
-        
-    #     # Extract solutions
-    #     f0_solution = solution[0:N]
-    #     f1_solution = solution[N:2*(N)]
-        
-    #     # Interpolate to our x grid
-    #     f0 = np.interp(self.r, r, f0_solution)
-    #     f1 = np.interp(self.r, r, f1_solution)
-        
-    #     # Return both the interpolated and original solutions
-    #     return f0, f1, r, f0_solution, f1_solution
-    
-
-
 
     def _solve_background_fields(self):
-        """Solve for background fields f0 and f1 in 3D spherical coordinates"""
-        print("Solving background fields in 3D spherical coordinates...")
-        
+        """
+        Solve the static coupled ODEs for f₀(r) and f₁(r) in 2D polar coordinates.
+        The equations are derived from Eq. (5.5) of the paper.
+        """
+        print("Solving background fields in 2D polar coordinates...")
         N = self.Nr
         dr = self.dr
         r = self.r
         r_safe = self.r_safe
-        
+
         def equations_2d(y):
             f0 = y[:N]
             f1 = y[N:]
             res0 = np.zeros(N)
             res1 = np.zeros(N)
-            
-            # 3D spherical Laplacian: ∇²f = f'' + (2/r)f'
+
+            # 2D radial Laplacian: ∇²f = f'' + (1/r)f'
             for i in range(N):
-                # Boundary conditions at r=0
                 if i == 0:
-                    # At r=0: f'(0) = 0, so ∇²f = 2 * (f1 - f0) / dr²
+                    # At r=0, symmetry gives f'(0)=0 → ∇²f ≈ 2(f₁ - f₀)/dr²
                     laplacian_f0 = 2 * (f0[1] - f0[0]) / dr**2
                     laplacian_f1 = 2 * (f1[1] - f1[0]) / dr**2
-                # Boundary at r=R_max
-                elif i == N-1:
-                    # Neumann boundary: f'(R_max) = 0
+                elif i == N - 1:
+                    # Neumann boundary at r=R_max
                     laplacian_f0 = 2 * (f0[N-2] - f0[N-1]) / dr**2
                     laplacian_f1 = 2 * (f1[N-2] - f1[N-1]) / dr**2
                 else:
-                    # Interior points
-                    # f'' ≈ (f_{i-1} - 2f_i + f_{i+1}) / dr²
-                    second_deriv_f0 = (f0[i-1] - 2*f0[i] + f0[i+1]) / dr**2
-                    second_deriv_f1 = (f1[i-1] - 2*f1[i] + f1[i+1]) / dr**2
-                    
-                    # (1/r)f' ≈ (1/r_i) * (f_{i+1} - f_{i-1})/(2dr)
-                    first_deriv_f0 = (f0[i+1] - f0[i-1]) / (2 * dr)
-                    first_deriv_f1 = (f1[i+1] - f1[i-1]) / (2 * dr)
-                    
-                    radial_term_f0 = (1 / r_safe[i]) * first_deriv_f0
-                    radial_term_f1 = (1 / r_safe[i]) * first_deriv_f1
-                    
-                    laplacian_f0 = second_deriv_f0 + radial_term_f0
-                    laplacian_f1 = second_deriv_f1 + radial_term_f1
-                
-                # Nonlinear terms (same as before)
-                nonlinear_f0 = self.mu1 * f0[i] - 2*self.lam3 * f0[i] * (2 * f0[i]**2 + 2 * f1[i]**2) + 4 * self.lam4 * f0[i] * (-f0[i]**2 + f1[i]**2)
-                # nonlinear_f0 = self.mu * f0[i] - 2*self.lam * f0[i] * (2 * f0[i]**2 + 2 * f1[i]**2) + 2 * self.lam4 * f0[i] * (-f0[i]**2 + f1[i]**2)
-                # nonlinear_f1 = self.omega**2 * f1[i] + self.mu * f1[i] - 2*self.lam * f1[i] * (2 * f0[i]**2 + 2 * f1[i]**2) - 2 * self.lam4 * f1[i] * (-f0[i]**2 + f1[i]**2)
-                nonlinear_f1 = self.omega**2 * f1[i] + self.mu1 * f1[i] - 2*self.lam3 * f1[i] * (2 * f0[i]**2 + 2 * f1[i]**2) - 4 * self.lam4 * f1[i] * (-f0[i]**2 + f1[i]**2)
-                
+                    # Interior points: central differences
+                    second_f0 = (f0[i-1] - 2*f0[i] + f0[i+1]) / dr**2
+                    first_f0  = (f0[i+1] - f0[i-1]) / (2 * dr)
+                    laplacian_f0 = second_f0 + (1 / r_safe[i]) * first_f0
+
+                    second_f1 = (f1[i-1] - 2*f1[i] + f1[i+1]) / dr**2
+                    first_f1  = (f1[i+1] - f1[i-1]) / (2 * dr)
+                    laplacian_f1 = second_f1 + (1 / r_safe[i]) * first_f1
+
+                # Nonlinear terms (Eq. (5.5))
+                nonlinear_f0 = (self.mu1 * f0[i]
+                                - self.lam3 * f0[i] * (2*f0[i]**2 + 2*f1[i]**2)
+                                + 2 * self.lam4 * f0[i] * (-f0[i]**2 + f1[i]**2))
+                nonlinear_f1 = (self.omega**2 * f1[i] + self.mu1 * f1[i]
+                                - self.lam3 * f1[i] * (2*f0[i]**2 + 2*f1[i]**2)
+                                - 2 * self.lam4 * f1[i] * (-f0[i]**2 + f1[i]**2))
+
                 res0[i] = laplacian_f0 + nonlinear_f0
                 res1[i] = laplacian_f1 + nonlinear_f1
-            
+
             return np.concatenate([res0, res1])
-        
-        # Initial guess - Gaussian profiles scaled for 3D
-        f0_initial = (1+np.tanh((r-4.5)/2))*0.2
-        f1_initial = (1-np.tanh((r-4.5)/2))*0.25
-        y_initial = np.concatenate([f0_initial, f1_initial])
-        
-        print("Solving nonlinear equations for f₀ and f₁ in 3D...")
+
+        # Initial guess based on hyperbolic tangent profiles
+        f0_init = (1 + np.tanh((self.r - 4.5) / 2)) * 0.2
+        f1_init = (1 - np.tanh((self.r - 4.5) / 2)) * 0.25
+        y_init = np.concatenate([f0_init, f1_init])
+
+        print("Solving nonlinear equations for f₀ and f₁...")
         try:
-            solution = fsolve(equations_2d, y_initial, xtol=1e-11, maxfev=5000000)
-            print("3D background solution found!")
+            sol = fsolve(equations_2d, y_init, xtol=1e-11, maxfev=5_000_000)
+            print("Background solution found!")
         except Exception as e:
             print(f"Warning: fsolve failed with error: {e}")
             print("Using initial guess as solution")
-            solution = y_initial
-        
-        # Extract solutions
-        f0_solution = solution[:self.Nr]
-        f1_solution = solution[self.Nr:]
-        
+            sol = y_init
 
-        
-        return f0_solution, f1_solution
-
+        f0_sol = sol[:self.Nr]
+        f1_sol = sol[self.Nr:]
+        return f0_sol, f1_sol
 
     def _build_2d_polar_laplacian(self):
-        """Build 2D radial Laplacian matrix: ∇² = d²/dr² + (1/r) d/dr"""
+        """
+        Build the sparse matrix representing the 2D radial Laplacian operator:
+        ∇² = d²/dr² + (1/r) d/dr, with Neumann boundary conditions at r=0 and r=R_max.
+        """
         print("Building 2D radial Laplacian matrix...")
-        
         N = self.Nr
         dr = self.dr
-        
-        # Initialize sparse matrix components
         rows, cols, data = [], [], []
-        
+
         # Interior points (i=1 to N-2)
-        for i in range(1, N-1):
+        for i in range(1, N - 1):
             r_i = self.r_safe[i]
-            
-            # Second derivative: f'' ≈ (f_{i-1} - 2f_i + f_{i+1})/dr²
-            # Coefficient for f_{i-1}
+            # Second derivative term
             rows.append(i); cols.append(i-1); data.append(1.0 / dr**2)
-            # Coefficient for f_i
-            rows.append(i); cols.append(i); data.append(-2.0 / dr**2)
-            # Coefficient for f_{i+1}
+            rows.append(i); cols.append(i);   data.append(-2.0 / dr**2)
             rows.append(i); cols.append(i+1); data.append(1.0 / dr**2)
-            
-            # First derivative: (1/r)f' ≈ (1/r_i) * (f_{i+1} - f_{i-1})/(2dr)
+
+            # First derivative term (1/r) d/dr
             if r_i > 0:
-                # Coefficient for f_{i-1}
-                rows.append(i); cols.append(i-1); data.append(-1.0 / (2 * r_i * dr))
-                # Coefficient for f_{i+1}
-                rows.append(i); cols.append(i+1); data.append(1.0 / (2 * r_i * dr))
-        
-        # Boundary at r=0 (i=0): use symmetry (f' = 0)
-        # For r=0: ∇²f ≈ 2(f_1 - f_0)/dr²
+                coeff = 1.0 / (2 * r_i * dr)
+                rows.append(i); cols.append(i-1); data.append(-coeff)
+                rows.append(i); cols.append(i+1); data.append( coeff)
+
+        # Boundary at r=0 (Neumann)
         rows.append(0); cols.append(0); data.append(-2.0 / dr**2)
-        rows.append(0); cols.append(1); data.append(2.0 / dr**2)
-        
-        # Boundary at r=R_max (i=N-1): Neumann boundary (f' = 0)
-        # For r=R_max: ∇²f ≈ 2(f_{N-2} - f_{N-1})/dr²
-        rows.append(N-1); cols.append(N-2); data.append(2.0 / dr**2)
+        rows.append(0); cols.append(1); data.append( 2.0 / dr**2)
+
+        # Boundary at r=R_max (Neumann)
+        rows.append(N-1); cols.append(N-2); data.append( 2.0 / dr**2)
         rows.append(N-1); cols.append(N-1); data.append(-2.0 / dr**2)
-        
-        # Create sparse matrix
+
         D2 = sp.coo_matrix((data, (rows, cols)), shape=(N, N), dtype=np.complex128).tocsr()
-        
         return D2
-    
+
     def _verify_background(self):
-        """Verify the background solution"""
+        """Print basic verification of the background solution."""
         print("\nBackground solution verification:")
         print(f"  f₀ range: [{np.min(self.f0):.6f}, {np.max(self.f0):.6f}]")
         print(f"  f₁ range: [{np.min(self.f1):.6f}, {np.max(self.f1):.6f}]")
         print(f"  Center: f₀(0)={self.f0[0]:.6f}, f₁(0)={self.f1[0]:.6f}")
-        print(f"  Boundary: f₀(L)={self.f0[-1]:.6f}, f₁(L)={self.f1[-1]:.6f}")
-    
+        print(f"  Boundary: f₀(R)={self.f0[-1]:.6f}, f₁(R)={self.f1[-1]:.6f}")
+
     def background_fields(self, t):
-        """Calculate background fields at time t"""
-        cos_wt = np.cos(self.omega * t)
-        sin_wt = np.sin(self.omega * t)
-        
-        # Initialize all 8 fields
+        """
+        Return the background field configuration at time t.
+        Constructed from f₀(r) and f₁(r) using the ansatz in Eq. (5.3) of the paper.
+        """
         phi = np.zeros((self.n_fields, self.Nr), dtype=np.complex128)
-        
-        # According to the background solution form:
-        phi[0, :] = self.f0 * np.cos(self.alpha) + self.f1 * cos_wt     # ψ₁
-        phi[1, :] = -self.f0 * np.cos(self.alpha) + self.f1 * cos_wt   # ψ₂
-        phi[2, :] = self.f0 * np.cos(self.alpha) - self.f1 * cos_wt    # ψ₃
-        phi[3, :] = -self.f0 * np.cos(self.alpha) - self.f1 * cos_wt   # ψ₄
-        phi[4, :] = -self.f0 * np.sin(self.alpha) - self.f1 * sin_wt   # ψ₅
-        phi[5, :] = self.f0 * np.sin(self.alpha) - self.f1 * sin_wt    # ψ₆
-        phi[6, :] = self.f0 * np.sin(self.alpha) + self.f1 * sin_wt    # ψ₇
-        phi[7, :] = -self.f0 * np.sin(self.alpha) + self.f1 * sin_wt   # ψ₈
-        
+
+        # First doublet (components 0-3)
+        phi[0, :] = (+self.f0 * np.cos(self.alpha1) + self.f1 * np.cos(self.omega * t)) * np.cos(self.beta)
+        phi[1, :] = (-self.f0 * np.cos(self.alpha1) + self.f1 * np.cos(self.omega * t)) * np.cos(self.beta)
+        phi[2, :] = (+self.f0 * np.cos(self.alpha2) - self.f1 * np.cos(self.omega * t + self.theta_alpha)) * np.sin(self.beta)
+        phi[3, :] = (-self.f0 * np.cos(self.alpha2) - self.f1 * np.cos(self.omega * t + self.theta_alpha)) * np.sin(self.beta)
+
+        # Second doublet (components 4-7)
+        phi[4, :] = (-self.f0 * np.sin(self.alpha1) - self.f1 * np.sin(self.omega * t)) * np.cos(self.beta)
+        phi[5, :] = (+self.f0 * np.sin(self.alpha1) - self.f1 * np.sin(self.omega * t)) * np.cos(self.beta)
+        phi[6, :] = (+self.f0 * np.sin(self.alpha2) + self.f1 * np.sin(self.omega * t + self.theta_alpha)) * np.sin(self.beta)
+        phi[7, :] = (-self.f0 * np.sin(self.alpha2) + self.f1 * np.sin(self.omega * t + self.theta_alpha)) * np.sin(self.beta)
+
         return phi
-    
+
     def compute_potential_jacobian(self, t):
-        """Compute Jacobian matrix of the potential part for linearization"""
-        phi = self.background_fields(t)  # Shape: (8, Nr)
-        
-        # Extract all fields
-        psi = phi  # psi[0] = ψ₁, psi[1] = ψ₂, ..., psi[7] = ψ₈
-        
-        # Initialize Jacobian matrix J(t,x) - shape: (8, 8, Nr)
-        J = np.zeros((self.n_fields, self.n_fields, self.Nr), dtype=np.complex128)
-        
+        """
+        Compute the Jacobian matrix J(t, r) = ∂²V/∂ψ_i∂ψ_j of the potential,
+        evaluated on the background solution at time t.
+        Returns an array of shape (n_fields, n_fields, Nr).
+        """
+        phi = self.background_fields(t)
+        psi = phi   # psi[0] = ψ₁, ..., psi[7] = ψ₈
+
         # Parameters
         mu1, mu2 = self.mu1, self.mu2
         lam1, lam2, lam3 = self.lam1, self.lam2, self.lam3
         lam4 = self.lam4
-        lam5_abs = self.lam5_abs
-        
-        # Note: λ₄ - |λ₅| = 2λ₄ (since λ₄ + |λ₅| = 0)
+
+        # Since λ₄ + |λ₅| = 0, we have λ₄ - |λ₅| = 2λ₄
         lam4_minus_lam5 = 2 * lam4
-        
-        # For each spatial point
+
+        J = np.zeros((self.n_fields, self.n_fields, self.Nr), dtype=np.complex128)
+
         for k in range(self.Nr):
-            # Field values at point k
-            p = psi[:, k]  # p[0] = ψ₁, ..., p[7] = ψ₈
-            
-            # Calculate combinations for this point
-            # Ψ₁†Ψ₁ = ψ₁² + ψ₃² + ψ₅² + ψ₇²
-            sum1 = p[0]**2 + p[2]**2 + p[4]**2 + p[6]**2
-            
-            # Ψ₂†Ψ₂ = ψ₂² + ψ₄² + ψ₆² + ψ₈²
-            sum2 = p[1]**2 + p[3]**2 + p[5]**2 + p[7]**2
-            
-            # Re(Ψ₁†Ψ₂) = ψ₁ψ₂ + ψ₅ψ₆ + ψ₃ψ₄ + ψ₇ψ₈
-            re_cross = p[0]*p[1] + p[4]*p[5] + p[2]*p[3] + p[6]*p[7]
-            
-            # Now compute Jacobian elements
-            # For each field i, we need ∂V/∂ψ_i
-            
-            # Field indices: 0=ψ₁, 1=ψ₂, 2=ψ₃, 3=ψ₄, 4=ψ₅, 5=ψ₆, 6=ψ₇, 7=ψ₈
-            
-            # ∂V/∂ψ₁
+            p = psi[:, k]   # field values at this radial point
+
+            # Useful combinations
+            sum1 = p[0]**2 + p[2]**2 + p[4]**2 + p[6]**2   # Ψ₁†Ψ₁
+            sum2 = p[1]**2 + p[3]**2 + p[5]**2 + p[7]**2   # Ψ₂†Ψ₂
+            re_cross = p[0]*p[1] + p[4]*p[5] + p[2]*p[3] + p[6]*p[7]  # Re(Ψ₁†Ψ₂)
+
+            # Jacobian elements (∂²V/∂ψ_i∂ψ_j)
+            # Component 0 (ψ₁)
             J[0, 0, k] = mu1 - 2*lam1*(3*p[0]**2 + p[2]**2 + p[4]**2 + p[6]**2 + sum1) - lam3*sum2 - lam4_minus_lam5*p[1]**2
             J[0, 1, k] = -4*lam1*p[0]*p[1] - lam4_minus_lam5*(re_cross + p[0]*p[1])
             J[0, 2, k] = -4*lam1*p[0]*p[2] - lam4_minus_lam5*p[1]*p[3]
@@ -992,8 +255,8 @@ class EightFieldOscillonSystem:
             J[0, 5, k] = -4*lam1*p[0]*p[5] - lam4_minus_lam5*p[1]*p[4]
             J[0, 6, k] = -4*lam1*p[0]*p[6] - lam4_minus_lam5*p[1]*p[7]
             J[0, 7, k] = -4*lam1*p[0]*p[7] - lam4_minus_lam5*p[1]*p[6]
-            
-            # ∂V/∂ψ₂ (symmetric with respect to ψ₁↔ψ₂, with μ₂, λ₂ instead of μ₁, λ₁)
+
+            # Component 1 (ψ₂)
             J[1, 0, k] = -4*lam2*p[1]*p[0] - lam4_minus_lam5*(re_cross + p[0]*p[1])
             J[1, 1, k] = mu2 - 2*lam2*(3*p[1]**2 + p[3]**2 + p[5]**2 + p[7]**2 + sum2) - lam3*sum1 - lam4_minus_lam5*p[0]**2
             J[1, 2, k] = -4*lam2*p[1]*p[2] - lam4_minus_lam5*p[0]*p[3]
@@ -1002,8 +265,8 @@ class EightFieldOscillonSystem:
             J[1, 5, k] = -4*lam2*p[1]*p[5] - lam4_minus_lam5*p[0]*p[4]
             J[1, 6, k] = -4*lam2*p[1]*p[6] - lam4_minus_lam5*p[0]*p[7]
             J[1, 7, k] = -4*lam2*p[1]*p[7] - lam4_minus_lam5*p[0]*p[6]
-            
-            # ∂V/∂ψ₃ (similar to ψ₁ but with indices 2 and 0 swapped in some terms)
+
+            # Component 2 (ψ₃)
             J[2, 0, k] = -4*lam1*p[2]*p[0] - lam4_minus_lam5*p[3]*p[1]
             J[2, 1, k] = -4*lam1*p[2]*p[1] - lam4_minus_lam5*p[3]*p[0]
             J[2, 2, k] = mu1 - 2*lam1*(p[0]**2 + 3*p[2]**2 + p[4]**2 + p[6]**2 + sum1) - lam3*sum2 - lam4_minus_lam5*p[3]**2
@@ -1012,8 +275,8 @@ class EightFieldOscillonSystem:
             J[2, 5, k] = -4*lam1*p[2]*p[5] - lam4_minus_lam5*p[3]*p[4]
             J[2, 6, k] = -4*lam1*p[2]*p[6] - lam4_minus_lam5*p[3]*p[7]
             J[2, 7, k] = -4*lam1*p[2]*p[7] - lam4_minus_lam5*p[3]*p[6]
-            
-            # ∂V/∂ψ₄ (similar to ψ₂ but with indices 3 and 1 swapped)
+
+            # Component 3 (ψ₄)
             J[3, 0, k] = -4*lam2*p[3]*p[0] - lam4_minus_lam5*p[2]*p[1]
             J[3, 1, k] = -4*lam2*p[3]*p[1] - lam4_minus_lam5*p[2]*p[0]
             J[3, 2, k] = -4*lam2*p[3]*p[2] - lam4_minus_lam5*(re_cross + p[2]*p[3])
@@ -1022,8 +285,8 @@ class EightFieldOscillonSystem:
             J[3, 5, k] = -4*lam2*p[3]*p[5] - lam4_minus_lam5*p[2]*p[4]
             J[3, 6, k] = -4*lam2*p[3]*p[6] - lam4_minus_lam5*p[2]*p[7]
             J[3, 7, k] = -4*lam2*p[3]*p[7] - lam4_minus_lam5*p[2]*p[6]
-            
-            # ∂V/∂ψ₅ (similar to ψ₁ but for imaginary parts)
+
+            # Component 4 (ψ₅)
             J[4, 0, k] = -4*lam1*p[4]*p[0] - lam4_minus_lam5*p[5]*p[1]
             J[4, 1, k] = -4*lam1*p[4]*p[1] - lam4_minus_lam5*p[5]*p[0]
             J[4, 2, k] = -4*lam1*p[4]*p[2] - lam4_minus_lam5*p[5]*p[3]
@@ -1032,8 +295,8 @@ class EightFieldOscillonSystem:
             J[4, 5, k] = -4*lam1*p[4]*p[5] - lam4_minus_lam5*(re_cross + p[4]*p[5])
             J[4, 6, k] = -4*lam1*p[4]*p[6] - lam4_minus_lam5*p[5]*p[7]
             J[4, 7, k] = -4*lam1*p[4]*p[7] - lam4_minus_lam5*p[5]*p[6]
-            
-            # ∂V/∂ψ₆ (similar to ψ₂ but for imaginary parts)
+
+            # Component 5 (ψ₆)
             J[5, 0, k] = -4*lam2*p[5]*p[0] - lam4_minus_lam5*p[4]*p[1]
             J[5, 1, k] = -4*lam2*p[5]*p[1] - lam4_minus_lam5*p[4]*p[0]
             J[5, 2, k] = -4*lam2*p[5]*p[2] - lam4_minus_lam5*p[4]*p[3]
@@ -1042,8 +305,8 @@ class EightFieldOscillonSystem:
             J[5, 5, k] = mu2 - 2*lam2*(p[1]**2 + p[3]**2 + 3*p[5]**2 + p[7]**2 + sum2) - lam3*sum1 - lam4_minus_lam5*p[4]**2
             J[5, 6, k] = -4*lam2*p[5]*p[6] - lam4_minus_lam5*p[4]*p[7]
             J[5, 7, k] = -4*lam2*p[5]*p[7] - lam4_minus_lam5*p[4]*p[6]
-            
-            # ∂V/∂ψ₇ (similar to ψ₁)
+
+            # Component 6 (ψ₇)
             J[6, 0, k] = -4*lam1*p[6]*p[0] - lam4_minus_lam5*p[7]*p[1]
             J[6, 1, k] = -4*lam1*p[6]*p[1] - lam4_minus_lam5*p[7]*p[0]
             J[6, 2, k] = -4*lam1*p[6]*p[2] - lam4_minus_lam5*p[7]*p[3]
@@ -1052,8 +315,8 @@ class EightFieldOscillonSystem:
             J[6, 5, k] = -4*lam1*p[6]*p[5] - lam4_minus_lam5*p[7]*p[4]
             J[6, 6, k] = mu1 - 2*lam1*(p[0]**2 + p[2]**2 + p[4]**2 + 3*p[6]**2 + sum1) - lam3*sum2 - lam4_minus_lam5*p[7]**2
             J[6, 7, k] = -4*lam1*p[6]*p[7] - lam4_minus_lam5*(re_cross + p[6]*p[7])
-            
-            # ∂V/∂ψ₈ (similar to ψ₂)
+
+            # Component 7 (ψ₈)
             J[7, 0, k] = -4*lam2*p[7]*p[0] - lam4_minus_lam5*p[6]*p[1]
             J[7, 1, k] = -4*lam2*p[7]*p[1] - lam4_minus_lam5*p[6]*p[0]
             J[7, 2, k] = -4*lam2*p[7]*p[2] - lam4_minus_lam5*p[6]*p[3]
@@ -1062,36 +325,40 @@ class EightFieldOscillonSystem:
             J[7, 5, k] = -4*lam2*p[7]*p[5] - lam4_minus_lam5*p[6]*p[4]
             J[7, 6, k] = -4*lam2*p[7]*p[6] - lam4_minus_lam5*(re_cross + p[6]*p[7])
             J[7, 7, k] = mu2 - 2*lam2*(p[1]**2 + p[3]**2 + p[5]**2 + 3*p[7]**2 + sum2) - lam3*sum1 - lam4_minus_lam5*p[6]**2
-        
+
         return J
 
-# ================================
+
+# =============================================================================
 # 2. Floquet Analyzer for 8-Field System (2D)
-# ================================
-
-
+# =============================================================================
 class EightFieldFloquetAnalyzer2D:
+    """
+    Performs Floquet stability analysis by constructing the linearized evolution
+    operator and computing the monodromy matrix. The analysis includes a sponge
+    layer to absorb outgoing perturbations.
+    """
+
     def __init__(self, system):
         self.system = system
         self.Nr = system.Nr
         self.n_fields = system.n_fields
         self.total_dof = system.total_dof
-    
+
     def build_linear_operator(self, t):
-        """Build full linear operator with Sponge Layer ABC: d/dt(y) = M * y
-           where y = [delta, dot_delta].
-           M = [[0, I], [D2+J, -Sponge]]
-           The 'Sponge' term introduces the delta_dot dependence (absorption)."""
-        
-        # --- 1. Construct the original Force Matrix (Laplacian + Jacobian) ---
-        # Use 2D radial Laplacian for each field
-        # D_list = [self.system.D2_radial for _ in range(self.n_fields)]
+        """
+        Build the full linear operator M(t) for the first‑order system
+        d/dt (δ, δ̇)ᵀ = M(t) (δ, δ̇)ᵀ, where
+        M = [[0, I], [D₂ + J(t), -Γ(r)]].
+        The term -Γ(r) implements the sponge absorbing boundary condition.
+        """
+        # Laplacian part (block diagonal for each field)
         D_list = [self.system.D2_2d for _ in range(self.n_fields)]
         D_block = sp.block_diag(D_list, format='csr', dtype=np.complex128)
-        
+
+        # Jacobian part (potential curvature)
         J_tx = self.system.compute_potential_jacobian(t)
         rows, cols, data = [], [], []
-        
         for k in range(self.Nr):
             for i in range(self.n_fields):
                 for j in range(self.n_fields):
@@ -1102,164 +369,129 @@ class EightFieldFloquetAnalyzer2D:
                         rows.append(row_idx)
                         cols.append(col_idx)
                         data.append(val)
-        
-        J_block = sp.coo_matrix((data, (rows, cols)), 
-                               shape=(self.total_dof, self.total_dof),
-                               dtype=np.complex128).tocsr()
-        
+        J_block = sp.coo_matrix((data, (rows, cols)),
+                                shape=(self.total_dof, self.total_dof),
+                                dtype=np.complex128).tocsr()
         L_force = D_block + J_block
-        
-        # --- 2. Construct the Sponge Layer (Absorbing Boundary Condition) ---
-        # This adds the term -Gamma(r) * dot_delta
+
+        # Sponge layer profile (quadratic ramp near the boundary)
         r = self.system.r
         R_max = self.system.R_max
-        
-        # Sponge parameters
-        absorb_width = R_max*0.1
-        absorb_start = R_max*0.9
-        sponge_strength = 5.0  # Adjust strength as needed
-        
-        # Define sponge profile (0 in bulk, quadratic/tanh rise near boundary)
+        absorb_width = R_max * 0.1
+        absorb_start = R_max * 0.9
+        sponge_strength = 5.0
         sponge_profile = np.zeros_like(r)
         mask = r > absorb_start
         if np.any(mask):
-            # Quadratic ramp
-            sponge_profile[mask] = sponge_strength * ((r[mask] - absorb_start) / absorb_width)**2
-        
-        # Create diagonal sponge matrix for one field
+            ratio = (r[mask] - absorb_start) / absorb_width
+            sponge_profile[mask] = sponge_strength * ratio**2
         S_diag = sp.diags(sponge_profile, format='csr', dtype=np.complex128)
-        
-        # Block diagonal sponge for all fields
         S_block = sp.block_diag([S_diag] * self.n_fields, format='csr')
-        
-        # --- 3. Assemble the Full 2N x 2N Phase Space Matrix ---
-        # Matrix form:
-        # [ 0       I     ]
-        # [ L_force -S_block ]
-        
+
+        # Assemble full 2N×2N matrix
         dim = self.total_dof
         Zero = sp.csr_matrix((dim, dim), dtype=np.complex128)
         Eye = sp.eye(dim, format='csr', dtype=np.complex128)
-        
-        # Use bmat to assemble the sparse blocks efficiently
-        Full_L = sp.bmat([
-            [Zero,    Eye],
-            [L_force, -S_block]
-        ], format='csr')
-        
+        Full_L = sp.bmat([[Zero, Eye],
+                          [L_force, -S_block]], format='csr')
         return Full_L
-    
+
     def compute_full_monodromy_matrix_high_precision(self, n_time_samples=50):
-        """Compute full monodromy matrix with high precision using the full operator"""
+        """
+        Compute the monodromy matrix M = U(T, 0) by integrating the linearized
+        equations column by column with high precision. Uses a fixed number of
+        pre‑computed time samples and linear interpolation between them.
+        """
         T = self.system.T
         dim = 2 * self.total_dof
-        
         print(f"Computing full monodromy matrix with high precision (with Sponge Layer)...")
         print(f"Dimension: {dim} × {dim}")
         print(f"Using {n_time_samples} time samples")
-        
-        # Precompute linear operators at different times with higher sampling
+
+        # Precompute linear operators at different times
         times = np.linspace(0, T, n_time_samples, endpoint=False)
         L_operators = []
-        
         print("Precomputing linear operators at time samples...")
         for i, t in enumerate(times):
             if i % 1000 == 0:
                 print(f"  Time sample {i+1}/{n_time_samples}: t = {t:.4f}")
             L_operators.append(self.build_linear_operator(t))
-        
+
         # Initialize monodromy matrix as identity
         M = np.eye(dim, dtype=np.complex128)
-        
-        # Compute all columns with high precision
+
+        # Compute all columns
         print("Computing monodromy matrix columns...")
         for col in range(dim):
             if col % 100 == 0:
                 print(f"  Column {col+1}/{dim}")
-            
             y0 = M[:, col]
-            
+
             def ode_rhs(t, y):
                 # Find nearest time sample with linear interpolation
                 idx = int(t / T * n_time_samples) % n_time_samples
                 idx_next = (idx + 1) % n_time_samples
-                
                 t1 = times[idx]
                 t2 = times[idx_next] if idx_next != 0 else T
-                
-                # Linear interpolation between operators
                 if t2 > t1:
                     alpha = (t - t1) / (t2 - t1)
                 else:
                     alpha = (t - t1) / (T - t1 + t2)
-                
-                # Interpolate between the two nearest operators
-                # Note: L is now the full 2N x 2N matrix including sponge terms
                 L1 = L_operators[idx]
                 L2 = L_operators[idx_next] if idx_next < n_time_samples else L_operators[0]
                 L = (1.0 - alpha) * L1 + alpha * L2
-                
-                # The equation is simply dy/dt = L * y
-                # L=L_operators[idx]
                 return L.dot(y)
-            
+
             try:
-                # Use high-order integration method with very tight tolerances
                 sol = solve_ivp(ode_rhs, [0, T], y0,
-                              method='DOP853',
-                              rtol=1e-11,
-                              atol=1e-13,
-                              max_step=T/140,
-                              dense_output=False)
-                
+                                method='DOP853',
+                                rtol=1e-11, atol=1e-13,
+                                max_step=T/140, dense_output=False)
                 M[:, col] = sol.y[:, -1]
-                
             except Exception as e:
                 print(f"  Warning: Integration failed for column {col}: {e}")
                 print(f"  Using identity column as fallback")
-        
+
         print("Monodromy matrix computation completed!")
         return M
-    
+
     def compute_all_eigenvalues_high_precision(self):
-        """Compute all eigenvalues with high precision"""
+        """
+        Compute the monodromy matrix and then all its eigenvalues and eigenvectors.
+        This is the most time‑consuming step; use with care.
+        """
         print("\nComputing full monodromy matrix with high precision...")
         M = self.compute_full_monodromy_matrix_high_precision(n_time_samples=40000)
-        
+
         print("\nComputing all eigenvalues and eigenvectors with high precision...")
         print("This may take a long time, please be patient...")
-        
-        # Convert to dense matrix for eigenvalue computation
         M_dense = M.toarray() if sp.issparse(M) else M
-        
-        # Use numpy's high-precision eigenvalue solver
         eigenvalues, eigenvectors = np.linalg.eig(M_dense)
-        
-        # Sort eigenvalues and eigenvectors by magnitude for better analysis
-        sorted_indices = np.argsort(-np.abs(eigenvalues))
-        eigenvalues = eigenvalues[sorted_indices]
-        eigenvectors = eigenvectors[:, sorted_indices]
-        
+
+        # Sort by magnitude (largest first)
+        sorted_idx = np.argsort(-np.abs(eigenvalues))
+        eigenvalues = eigenvalues[sorted_idx]
+        eigenvectors = eigenvectors[:, sorted_idx]
         print(f"Computation completed! Found {len(eigenvalues)} eigenvalues and eigenvectors")
 
-        return eigenvalues, eigenvectors, M 
-    
+        return eigenvalues, eigenvectors, M
+
     def analyze_stability_high_precision(self):
-        """Complete stability analysis with high precision"""
+        """
+        Full stability analysis: compute eigenvalues, Floquet exponents,
+        and classify modes as stable, marginal, or unstable.
+        """
         eigenvalues, eigenvectors, M = self.compute_all_eigenvalues_high_precision()
-        
-        # Compute Floquet exponents
+
         T = self.system.T
         exponents = np.log(eigenvalues) / T
-        
-        # Analyze results with high precision
         moduli = np.abs(eigenvalues)
-        
-        # Use tighter thresholds for stability classification
+
+        # Classification thresholds (adjusted for numerical precision)
         stable_mask = moduli <= 0.9999
         marginal_mask = (moduli > 0.9999) & (moduli < 1.0001)
         unstable_mask = moduli >= 1.0001
-        
+
         results = {
             'multipliers': eigenvalues,
             'exponents': exponents,
@@ -1274,19 +506,17 @@ class EightFieldFloquetAnalyzer2D:
             'unstable_indices': np.where(unstable_mask)[0],
             'monodromy_matrix': M
         }
-        
+
         if np.sum(unstable_mask) > 0:
             unstable_growth_rates = np.real(exponents[unstable_mask])
             results['max_growth_rate'] = np.max(unstable_growth_rates)
             results['avg_growth_rate'] = np.mean(unstable_growth_rates)
             results['max_modulus'] = np.max(moduli[unstable_mask])
-            
+
             # Sort unstable modes by growth rate
             unstable_indices = results['unstable_indices']
             sorted_unstable_idx = unstable_indices[np.argsort(-unstable_growth_rates)]
             results['sorted_unstable_indices'] = sorted_unstable_idx
-            
-            # Also store the most unstable mode index
             results['most_unstable_index'] = sorted_unstable_idx[0]
         else:
             results['max_growth_rate'] = 0.0
@@ -1294,43 +524,47 @@ class EightFieldFloquetAnalyzer2D:
             results['max_modulus'] = np.max(moduli)
             results['sorted_unstable_indices'] = np.array([])
             results['most_unstable_index'] = None
-        
+
         return results
 
 
-
+# =============================================================================
+# 3. Plot Functions (Publication Quality)
+# =============================================================================
 def plot_most_unstable_mode_pattern(system, results):
-    """Plot the spatial pattern of the most unstable mode"""
+    """
+    Visualize the spatial pattern of the most unstable Floquet mode.
+    Creates six subplots: real/imag/magnitude/phase profiles, energy distribution,
+    and a 2D polar contour of the dominant field component.
+    """
     if results['num_unstable'] == 0:
         print("\nNo unstable modes found, cannot plot unstable mode pattern.")
         return
-    
+
     # Get the most unstable mode
     most_unstable_idx = results['most_unstable_index']
     eigenvector = results['eigenvectors'][:, most_unstable_idx]
-    
+
     print(f"\nAnalyzing the most unstable mode (index {most_unstable_idx}):")
     print(f"  Growth rate: {np.real(results['exponents'][most_unstable_idx]):.6e}")
     print(f"  |ρ|: {np.abs(results['multipliers'][most_unstable_idx]):.6e}")
-    
+
     # Extract position components (first half of eigenvector)
     total_dof = system.total_dof
     pos_components = eigenvector[:total_dof]
-    
-    # Split into the four fields
+
+    # Split into the 8 fields
     field_names = ['ψ1', 'ψ2', 'ψ3', 'ψ4', 'ψ5', 'ψ6', 'ψ7', 'ψ8']
     field_patterns = []
-    
     for i in range(system.n_fields):
         start_idx = i * system.Nr
         end_idx = (i + 1) * system.Nr
-        field_pattern = pos_components[start_idx:end_idx]
-        field_patterns.append(field_pattern)
-    
+        field_patterns.append(pos_components[start_idx:end_idx])
+
     # Create comprehensive plot
     fig = plt.figure(figsize=(16, 12))
-    
-    # Plot 1: Real parts of field patterns
+
+    # Plot 1: Real parts
     ax1 = plt.subplot(3, 2, 1)
     for i, (name, pattern) in enumerate(zip(field_names, field_patterns)):
         ax1.plot(system.r, np.real(pattern), label=f'{name} (real)', linewidth=2, alpha=0.8)
@@ -1340,8 +574,8 @@ def plot_most_unstable_mode_pattern(system, results):
     ax1.legend(loc='upper right', fontsize=10)
     ax1.grid(True, alpha=0.3)
     ax1.set_xlim([0, system.R_max/2])
-    
-    # Plot 2: Imaginary parts of field patterns
+
+    # Plot 2: Imaginary parts
     ax2 = plt.subplot(3, 2, 2)
     for i, (name, pattern) in enumerate(zip(field_names, field_patterns)):
         ax2.plot(system.r, np.imag(pattern), label=f'{name} (imag)', linewidth=2, alpha=0.8)
@@ -1351,8 +585,8 @@ def plot_most_unstable_mode_pattern(system, results):
     ax2.legend(loc='upper right', fontsize=10)
     ax2.grid(True, alpha=0.3)
     ax2.set_xlim([0, system.R_max/2])
-    
-    # Plot 3: Magnitude of field patterns
+
+    # Plot 3: Magnitudes
     ax3 = plt.subplot(3, 2, 3)
     for i, (name, pattern) in enumerate(zip(field_names, field_patterns)):
         ax3.plot(system.r, np.abs(pattern), label=f'{name}', linewidth=2, alpha=0.8)
@@ -1362,12 +596,12 @@ def plot_most_unstable_mode_pattern(system, results):
     ax3.legend(loc='upper right', fontsize=10)
     ax3.grid(True, alpha=0.3)
     ax3.set_xlim([0, system.R_max/2])
-    
-    # Plot 4: Phase of field patterns
+
+    # Plot 4: Phases
     ax4 = plt.subplot(3, 2, 4)
     for i, (name, pattern) in enumerate(zip(field_names, field_patterns)):
         phase = np.angle(pattern)
-        # Unwrap phase for better visualization
+        # Unwrap to avoid discontinuities
         phase_unwrapped = np.unwrap(phase)
         ax4.plot(system.r, phase_unwrapped, label=f'{name}', linewidth=2, alpha=0.8)
     ax4.set_xlabel('Radial coordinate r', fontsize=12)
@@ -1376,137 +610,112 @@ def plot_most_unstable_mode_pattern(system, results):
     ax4.legend(loc='upper right', fontsize=10)
     ax4.grid(True, alpha=0.3)
     ax4.set_xlim([0, system.R_max/2])
-    
+
     # Plot 5: Energy distribution among fields
     ax5 = plt.subplot(3, 2, 5)
-    field_energies = []
-    for pattern in field_patterns:
-        energy = np.sum(np.abs(pattern)**2)
-        field_energies.append(energy)
-    
+    field_energies = [np.sum(np.abs(pattern)**2) for pattern in field_patterns]
     total_energy = np.sum(field_energies)
-    energy_ratios = [e/total_energy for e in field_energies]
-    
-    bars = ax5.bar(field_names, energy_ratios, color=['blue', 'red', 'green', 'purple'], alpha=0.7)
+    energy_ratios = [e / total_energy for e in field_energies]
+
+    bars = ax5.bar(field_names, energy_ratios, color=['blue', 'red', 'green', 'purple']*2, alpha=0.7)
     ax5.set_xlabel('Field', fontsize=12)
     ax5.set_ylabel('Energy Ratio', fontsize=12)
     ax5.set_title('Energy Distribution Among Fields', fontsize=14)
     ax5.grid(True, alpha=0.3, axis='y')
-    
-    # Add energy ratio values on bars
     for bar, ratio in zip(bars, energy_ratios):
         height = bar.get_height()
         ax5.text(bar.get_x() + bar.get_width()/2., height,
-                f'{ratio:.3f}', ha='center', va='bottom', fontsize=10)
-    
-    # Plot 6: 2D visualization of the most dominant field pattern
+                 f'{ratio:.3f}', ha='center', va='bottom', fontsize=10)
+
+    # Plot 6: 2D polar contour of the dominant field
     ax6 = plt.subplot(3, 2, 6)
-    
-    # Find the field with maximum energy
     dominant_field_idx = np.argmax(energy_ratios)
     dominant_pattern = field_patterns[dominant_field_idx]
-    
-    # Create 2D polar plot
+
     theta = np.linspace(0, 2*np.pi, 100)
     r = system.r
-    R, Theta = np.meshgrid(r[:len(r)//2], theta)  # Only use first half of radial points
-    
-    # Use magnitude of dominant pattern
+    R, Theta = np.meshgrid(r[:len(r)//2], theta)   # only first half of radial points
     pattern_magnitude = np.abs(dominant_pattern[:len(r)//2])
     pattern_2d = np.outer(np.ones_like(theta), pattern_magnitude)
-    
-    # Create polar contour plot
+
     im = ax6.contourf(Theta, R, pattern_2d, levels=50, cmap='viridis')
     ax6.set_aspect('equal')
     ax6.set_title(f'2D Pattern of Dominant Field ({field_names[dominant_field_idx]})', fontsize=14)
     ax6.set_xlabel('θ', fontsize=12)
     ax6.set_ylabel('r', fontsize=12)
-    
-    # Add colorbar
     plt.colorbar(im, ax=ax6, shrink=0.8, label='Amplitude')
-    
+
     plt.suptitle(f'Most Unstable Mode Analysis (Mode {most_unstable_idx})', fontsize=16, y=0.98)
     plt.tight_layout()
-    # plt.savefig('most_unstable_mode_pattern_2hdm.pdf', dpi=300, bbox_inches='tight')
     plt.savefig('most_unstable_mode_pattern_2hdm.png', dpi=300, bbox_inches='tight')
     plt.show()
-    
-    # Print detailed information about the most unstable mode
+
+    # Print summary
     print(f"\nMost Unstable Mode Analysis:")
     print(f"  Mode index: {most_unstable_idx}")
     print(f"  Growth rate: {np.real(results['exponents'][most_unstable_idx]):.6e}")
     print(f"  Frequency: {np.imag(results['exponents'][most_unstable_idx]):.6e}")
     print(f"  |ρ|: {np.abs(results['multipliers'][most_unstable_idx]):.6e}")
     print(f"  arg(ρ): {np.angle(results['multipliers'][most_unstable_idx]):.6f} rad")
-    
     print(f"\nEnergy distribution among fields:")
-    for i, (name, ratio) in enumerate(zip(field_names, energy_ratios)):
+    for name, ratio in zip(field_names, energy_ratios):
         print(f"  {name}: {ratio:.3f} ({ratio*100:.1f}%)")
-    
     print(f"\nDominant field: {field_names[dominant_field_idx]} ({energy_ratios[dominant_field_idx]*100:.1f}% of total energy)")
-    
-    # Save the most unstable mode data to file
-    # save_most_unstable_mode_data(system, results, most_unstable_idx, field_patterns)
 
-# ================================
-# 3. Plot Functions (Paper Format for 2D)
-# ================================
+
 def plot_background_fields_2d(system):
-    """Plot background fields f0 and f1 in 2D spherical coordinates"""
+    """Plot the background profiles f₀(r) and f₁(r) for the 2HDM."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    
-    # Plot f0
+
     ax1.plot(system.r, system.f0, 'b-', linewidth=2)
     ax1.set_xlabel('Radial coordinate r', fontsize=12)
     ax1.set_ylabel('Field amplitude f₀(r)', fontsize=12)
     ax1.set_title('Background field f₀(r) in 2D', fontsize=14)
     ax1.grid(True, alpha=0.3)
-    # ax1.set_xlim([0, system.R_max/2])
-    
-    # Plot f1
+
     ax2.plot(system.r, system.f1, 'r-', linewidth=2)
     ax2.set_xlabel('Radial coordinate r', fontsize=12)
     ax2.set_ylabel('Field amplitude f₁(r)', fontsize=12)
     ax2.set_title('Background field f₁(r) in 2D', fontsize=14)
     ax2.grid(True, alpha=0.3)
-    # ax2.set_xlim([0, system.R_max/2])
-    
+
     plt.tight_layout()
     plt.savefig('background_fields_2d_2hdm.png', dpi=150, bbox_inches='tight')
     plt.show()
 
+
 def create_paper_format_plots_2d(system, results):
-    """Create publication-quality plots for 2D spherical coordinates - only top row"""
-    
-    eigenvalues=results['multipliers']
-    # Create figure with only 2 subplots (top row)
+    """
+    Create publication‑quality plots:
+    - Left: Floquet multipliers on the unit circle.
+    - Right: Histogram of |ρ|.
+    """
+    eigenvalues = results['multipliers']
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    
-    # Plot 1: Unit circle plot
+
+    # Unit circle
     theta = np.linspace(0, 2*np.pi, 200)
     ax1.plot(np.cos(theta), np.sin(theta), 'k-', linewidth=1.0, alpha=0.7, label='Unit circle')
-    
-    # Separate stable and unstable eigenvalues
+
     moduli = np.abs(eigenvalues)
     stable_mask = moduli <= 0.9999
-    one_mask =  (moduli > 0.9999) & (moduli < 1.0001)
-    unstable_mask = moduli > 1.0001
-    
-    stable_eigenvalues = eigenvalues[stable_mask]
-    one_eigenvalues = eigenvalues[one_mask]
-    unstable_eigenvalues = eigenvalues[unstable_mask]
-    
-    ax1.scatter(np.real(stable_eigenvalues), np.imag(stable_eigenvalues), 
-                c='blue', alpha=0.7, edgecolors='none', s=50, label=f'Stable(|ρ|<1): {len(stable_eigenvalues)}')
+    one_mask = (moduli > 0.9999) & (moduli < 1.0001)
+    unstable_mask = moduli >= 1.0001
 
+    stable_eig = eigenvalues[stable_mask]
+    one_eig = eigenvalues[one_mask]
+    unstable_eig = eigenvalues[unstable_mask]
 
-    ax1.scatter(np.real(one_eigenvalues), np.imag(one_eigenvalues), 
-                c='red', alpha=0.9, edgecolors='none', s=50, label=f'stable(|ρ|=1): {len(one_eigenvalues)}')
-    
+    ax1.scatter(np.real(stable_eig), np.imag(stable_eig),
+                c='blue', alpha=0.7, edgecolors='none', s=50,
+                label=f'Stable (|ρ|<1): {len(stable_eig)}')
+    ax1.scatter(np.real(one_eig), np.imag(one_eig),
+                c='red', alpha=0.9, edgecolors='none', s=50,
+                label=f'Marginal (|ρ|=1): {len(one_eig)}')
+    ax1.scatter(np.real(unstable_eig), np.imag(unstable_eig),
+                c='red', alpha=0.9, edgecolors='none', s=70, marker='^',
+                label=f'Unstable (|ρ|>1): {len(unstable_eig)}')
 
-    ax1.scatter(np.real(unstable_eigenvalues), np.imag(unstable_eigenvalues), 
-                c='red', alpha=0.9, edgecolors='none', s=70, marker='^', label=f'Unstable(|ρ|>1): {len(unstable_eigenvalues)}')
-    
     ax1.set_xlabel('Re(ρ)', fontsize=14)
     ax1.set_ylabel('Im(ρ)', fontsize=14)
     ax1.set_title('Floquet Multipliers (2D Spherical)', fontsize=16)
@@ -1515,84 +724,69 @@ def create_paper_format_plots_2d(system, results):
     ax1.axis('equal')
     ax1.set_xlim([-1.5, 1.5])
     ax1.set_ylim([-1.5, 1.5])
-    
-    # Plot 2: Histogram of eigenvalue moduli
+
+    # Histogram
     bins = np.linspace(0, max(2, np.max(moduli)*1.1), 30)
-    n, bins, patches = ax2.hist(moduli, bins=bins, alpha=0.7, color='steelblue', 
-                               edgecolor='black', linewidth=0.5)
-    
-    # Color unstable region
+    n, bins, patches = ax2.hist(moduli, bins=bins, alpha=0.7, color='steelblue',
+                                edgecolor='black', linewidth=0.5)
     for i, patch in enumerate(patches):
         if bins[i] > 1.0:
             patch.set_facecolor('lightcoral')
             patch.set_alpha(0.8)
-    
-    # Add stability threshold line
-    # ax2.axvline(x=1.0, color='red', linestyle='--', linewidth=2, alpha=0.8, label='Stability threshold')
-    
+
     ax2.set_xlabel('|ρ|', fontsize=14)
     ax2.set_ylabel('Frequency', fontsize=14)
     ax2.set_title('Distribution of Floquet Multiplier Moduli', fontsize=16)
-    # ax2.legend(loc='upper right', fontsize=10)
     ax2.grid(True, alpha=0.3, linestyle='--')
-    
-    # Add statistics text to histogram plot
+
     stats_text = f'Total eigenvalues: {len(eigenvalues)}\n'
-    stats_text += f'Stable (|ρ| < 1): {len(stable_eigenvalues)}\n'
-    stats_text += f'Stable (|ρ| = 1): {len(one_eigenvalues)}\n'
-    stats_text += f'Unstable (|ρ| > 1): {len(unstable_eigenvalues)}'
-    
+    stats_text += f'Stable (|ρ| < 1): {len(stable_eig)}\n'
+    stats_text += f'Marginal (|ρ| = 1): {len(one_eig)}\n'
+    stats_text += f'Unstable (|ρ| > 1): {len(unstable_eig)}'
     ax2.text(0.65, 0.95, stats_text, transform=ax2.transAxes,
-            fontsize=10, verticalalignment='top',
-            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray'))
-    
+             fontsize=10, verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray'))
+
     plt.tight_layout()
-    # plt.savefig('floquet_analysis_2d_simple.pdf', dpi=300)
     plt.savefig('floquet_analysis_2d_simple_2hdm.png', dpi=300)
-    
-    print(f"\nAnalysis completed:")
-    print(f"  Total eigenvalues analyzed: {len(eigenvalues)}")
-    print(f"  Stable eigenvalues (|ρ| < 1): {len(stable_eigenvalues)}")
-    print(f"  Stable eigenvalues (|ρ| = 1): {len(one_eigenvalues)}")
-    print(f"  Unstable eigenvalues (|ρ| > 1): {len(unstable_eigenvalues)}")
-    if len(unstable_eigenvalues) > 0:
-        print(f"  Maximum modulus: {np.max(moduli):.3f}")
-    
     plt.show()
 
+    print("\nAnalysis completed:")
+    print(f"  Total eigenvalues analyzed: {len(eigenvalues)}")
+    print(f"  Stable eigenvalues (|ρ| < 1): {len(stable_eig)}")
+    print(f"  Marginal eigenvalues (|ρ| = 1): {len(one_eig)}")
+    print(f"  Unstable eigenvalues (|ρ| > 1): {len(unstable_eig)}")
+    if len(unstable_eig) > 0:
+        print(f"  Maximum modulus: {np.max(moduli):.3f}")
 
-# ================================
+
+# =============================================================================
 # 4. Main Program
-# ================================
+# =============================================================================
 def main():
     print("=" * 70)
     print("EIGHT-FIELD OSCILLON SYSTEM - FLOQUET STABILITY ANALYSIS (2D)")
     print("=" * 70)
-    
-    # 1. Initialize system and solve background in 2D
+
     print("\n1. Initializing 2D system and solving background...")
     system = EightFieldOscillonSystem()
-    
-    # 2. Create analyzer
+
     print("\n2. Creating Floquet analyzer for 2D system...")
     analyzer = EightFieldFloquetAnalyzer2D(system)
-    
-    # 3. Compute stability with 100 eigenvalues
+
+    print("\n3. Computing stability...")
     results = analyzer.analyze_stability_high_precision()
-    
-    # Create paper-format plots
-    print("\nGenerating plots...")
+
+    print("\n4. Generating publication‑quality plots...")
     create_paper_format_plots_2d(system, results)
-    
+
+    print("\n5. Plotting most unstable mode pattern...")
     plot_most_unstable_mode_pattern(system, results)
-    
+
     print("\n" + "=" * 70)
     print("ANALYSIS COMPLETE")
     print("=" * 70)
 
-# ================================
-# 5. Run Program
-# ================================
+
 if __name__ == "__main__":
-    # Run complete analysis
     main()
