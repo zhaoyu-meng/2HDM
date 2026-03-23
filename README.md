@@ -116,7 +116,7 @@ Some simulations in this repository are computationally demanding. Below are gui
 | Script | Typical Runtime | Memory | Recommended Hardware |
 |--------|----------------|--------|----------------------|
 | `function_shape.py` | Minutes | < 1 GB | Any desktop |
-| `evolving-8.py` (2D, 256² grid) | Hours | 2–4 GB | Desktop / cluster |
+| `simulation_4fields_artificial.cpp` (2D, 256² grid) | Hours | 2–4 GB | Desktop / cluster |
 | `mpi_2HDM_random_initial_3D.cpp` (128³ grid) | Days | 8–16 GB | High‑memory node  |
 | `*Floquet.py` (2D, 129 radial points) | Hours | 2–4 GB | Desktop / cluster |
 
