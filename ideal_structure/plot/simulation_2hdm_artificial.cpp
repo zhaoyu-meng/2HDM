@@ -305,11 +305,11 @@ int main() {
 
                 // Equation of motion (second time derivative) – base part common to all
 
-                double base1 = fieldxx + fieldyy + fieldzz - fric * fieldt[comp]
+                double base1 = fieldxx + fieldyy + fieldzz - total_fric * fieldt[comp]
                             - ( - mu_1_sq * fields_now[comp][idx]
                               + 2.0 * lambda_1 * fields_now[comp][idx] * (f0*f0 + f1*f1 + f2*f2 + f3*f3)
                             + lambda_3 * fields_now[comp][idx] * (f4*f4 + f5*f5 + f6*f6 + f7*f7) );
-                double base2 = fieldxx + fieldyy + fieldzz - fric * fieldt[comp]
+                double base2 = fieldxx + fieldyy + fieldzz - total_fric * fieldt[comp]
                                 - ( - mu_2_sq * fields_now[comp][idx]
                                 + lambda_3 * fields_now[comp][idx] * (f0*f0 + f1*f1 + f2*f2 + f3*f3)
                                 + 2.0 * lambda_2 * fields_now[comp][idx] * (f4*f4 + f5*f5 + f6*f6 + f7*f7) );
