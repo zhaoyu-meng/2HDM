@@ -49,7 +49,7 @@ def new_func(seed, field_type):
 hist_2HDM = []
 hist_4fields = []
 hist_2fields = []
-for i in range(1, 70):
+for i in range(1, 301):
     a = new_func(i,"2hdm")
     b = new_func(i,"4fields")
     c = new_func(i,"2fields")
