@@ -22,24 +22,26 @@ The code reproduces all numerical results, including:
 
     .
     ├── Data/                          # Output directory (created automatically)
-    ├── Python/                        # Python scripts (main analysis)
-    │   ├── function_shape.py          # Solve background f0/f1 profiles (4‑field & 2HDM)
-    │   ├── plot_gif.py                # Generate GIF from simulation snapshots
-    │   ├── 2D_plot.py                 # Plot 2D R1 distribution and energy density
-    │   ├── 3D_plot.py                 # Extract and visualize 3D isosurface
-    │   ├── histogram.py               # Compute and plot bubble lifetimes
-    │   ├── 4-field-2D-Floquet.py      # Floquet analysis for 4‑field (2D)
-    │   ├── 4-field-3D-Floquet.py      # Floquet analysis for 4‑field (3D)
-    │   ├── 2HDM-2D-Floquet.py         # Floquet analysis for 2HDM (2D)
-    │   └── 2HDM-3D-Floquet.py         # Floquet analysis for 2HDM (3D)
-    ├── C++/                           # High‑performance C++ simulations
-    │   ├── simulation_2hdm_artificial.cpp
-    │   ├── simulation_4fields_artificial.cpp
+    ├── natural_evolution/             # Analysis for random initial condition
     │   ├── 2HDM_random_initial_2D.cpp
     │   ├── 2HDM_random_initial_3D.cpp
     │   ├── 2HDM_random_initial_loop.cpp
     │   ├── 4field_random_initial_loop.cpp
-    │   └── 2field_random_initial_loop.cpp
+    │   ├── 2field_random_initial_loop.cpp
+    │   ├── 2D_plot.py                 # Plot 2D R1 distribution and energy density
+    │   ├── 3D_plot.py                 # Extract and visualize 3D isosurface
+    │   ├── histogram.py               # Compute and plot bubble lifetimes
+    ├── ideal_structure/               # Reproduction of the long-lived structure
+    │   ├──plot/
+    │   |   ├── simulation_2hdm_artificial.cpp
+    │   |   ├── simulation_4fields_artificial.cpp
+    │   |   ├── function_shape.py          # Solve background f0/f1 profiles (4‑field & 2HDM)
+    │   |   └── plot_gif.py                # Generate GIF from simulation snapshots
+    │   └── Floquet/
+    │       ├── 2HDM-2D-Floquet.py         # Floquet analysis for 2HDM (2D)
+    │       ├── 2HDM-3D-Floquet.py         # Floquet analysis for 2HDM (3D)
+    │       ├── 4-field-2D-Floquet.py      # Floquet analysis for 4‑field (2D)
+    │       └── 4-field-3D-Floquet.py      # Floquet analysis for 4‑field (3D)   
     ├── requirements.txt               # Python dependencies
     ├── LICENSE                        # MIT License
     └── README.md                      # This file
