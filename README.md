@@ -180,7 +180,7 @@ If you only need to reproduce the figures, you can download pre‑computed simul
 
 - All parameters (masses, couplings) are set according to Appendices 1 and 2 of the paper.
 - Dimensionless units: distances in \(1/m_h\), time in \(1/(c m_h)\) with \(m_h = 125\ \mathrm{GeV}\).
-- Random seeds are fixed in Python scripts (`seed=8` for 4‑field, `seed=79` for 2HDM) and can be changed for statistics.
+- Random seeds are fixed in Python scripts (`seed=8` for 3D 2HDM, `seed=79` for 2D 2HDM) and can be changed for statistics.
 - The C++ codes use hard‑coded parameters; you may modify them at the top of each file.
 
 ---
