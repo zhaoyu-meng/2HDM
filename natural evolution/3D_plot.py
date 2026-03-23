@@ -3,10 +3,13 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from skimage import measure
 import imageio
+import os
+import io
 
 # Global parameters
 grid_size = 128          # Number of grid points in each dimension
 dx = 0.5                 # Grid spacing [1/m_h]
+dt = 0.1
 L = grid_size * dx / 2.0 # Half side length of the cubic domain
 iso_value = 0.0          # Isosurface value (R1 = 0 corresponds to domain wall)
 
@@ -157,88 +160,28 @@ def create_isosurface_plot(file_name, time_step, column_index=1, save_path=None)
         plt.tight_layout()
         plt.show()
 
-def create_animation(time_steps, base_filename, output_gif="animation.gif"):
-    """
-    Create a GIF animation of isosurfaces over multiple time steps.
 
-    Parameters
-    ----------
-    time_steps : list of int
-        List of time step numbers to include.
-    base_filename : str
-        Format string for the file names, e.g.
-        "fields_timestep={}_nx128_nt4800_seed8_Z2.txt". The curly braces will be
-        replaced by the time step number.
-    output_gif : str, optional
-        Output GIF file name. Default is "animation.gif".
-    """
-    frames = []
-
-    for time in time_steps:
-        try:
-            # Construct the file name
-            file_name = base_filename.format(time)
-
-            # Load data and extract isosurface
-            data_3d = load_data(file_name, column_index=1)
-            verts, faces, normals, values = extract_isosurface(data_3d, iso_value)
-
-            if verts is None:
-                continue
-
-            # Convert to physical coordinates
-            verts_physical = convert_to_physical_coordinates(verts)
-
-            # Create the plot
-            fig = plt.figure(figsize=(8, 6))
-            ax = fig.add_subplot(111, projection='3d')
-
-            mesh = ax.plot_trisurf(
-                verts_physical[:, 0],
-                verts_physical[:, 1],
-                faces,
-                verts_physical[:, 2],
-                cmap='Spectral',
-                linewidth=0.2,
-                antialiased=True
-            )
-
-            # Set labels and title
-            ax.set_xlabel('X')
-            ax.set_ylabel('Y')
-            ax.set_zlabel('Z')
-            ax.set_title(f'Time Step: {time}')
-
-            # Set axis limits
-            ax.set_xlim([-L, L])
-            ax.set_ylim([-L, L])
-            ax.set_zlim([-L, L])
-
-            ax.set_box_aspect([1, 1, 1])
-            ax.view_init(elev=30, azim=45)
-
-            plt.tight_layout()
-
-            # Convert the figure to an image array
-            fig.canvas.draw()
-            image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
-            image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-            frames.append(image)
-
-            plt.close(fig)
-
-            print(f"Processed time step {time}")
-
-        except Exception as e:
-            print(f"Error processing time step {time}: {e}")
-            continue
-
-    # Save the GIF
-    if frames:
-        imageio.mimsave(output_gif, frames, fps=5)
-        print(f"Animation saved to: {output_gif}")
+def wall_plot(vals_file):
+    if os.path.exists(vals_file):
+        data_vals = np.genfromtxt(vals_file, skip_header=1)
+        # If data_vals is 1D (only one column), reshape to 2D
+        if data_vals.ndim == 1:
+            data_vals = data_vals.reshape(-1, 1)
+        # The last column is the quantity of interest (e.g., ADW_Full)
+        y = data_vals[:, -1]
+        # Time axis: each row corresponds to one time step, starting from 0
+        t = np.arange(len(y)) * dt
+        plt.figure()
+        plt.plot(t, y, linewidth=1)
+        plt.xlabel('Time')
+        plt.ylabel('Wall Area')
+        plt.ylim(0,6000)
+        # plt.title('Evolution of wall area')
+        # plt.grid(True)
+        plt.show()
     else:
-        print("No frames available to create animation.")
+        print(f"File {vals_file} not found. Skipping additional plot.")
+
 
 # Main program
 if __name__ == "__main__":
@@ -248,7 +191,7 @@ if __name__ == "__main__":
     print(f"Grid spacing dx = {dx}")
     print(f"Physical coordinate range: [-{L:.2f}, {L:.2f}]")
 
-    file_name = 'Data/fields_timestep=3600_3d_2hdm_nx_0_128_nt4800_random.txt'
+    file_name = 'Data/fields_timestep=2000_3d_2hdm_nx_0_128_nt4800_random.txt'
 
     # Ensure the file exists before trying to plot
     try:
@@ -256,19 +199,12 @@ if __name__ == "__main__":
             file_name=file_name,
             time_step=0,
             column_index=1,
-            save_path="3D_isosurface.png"   # Set to None to display instead
+            save_path="3D_isosurface_2000.png"   # Set to None to display instead
         )
     except FileNotFoundError:
         print(f"File not found: {file_name}")
         print("Please make sure the file path is correct or use example data.")
 
-    # Uncomment the following block to create an animation
-    """
-    print("\n=== Creating animation ===")
-    time_steps = [0, 400, 800, 1200, 1600, 2000]
-    base_filename = "fields_timestep={}_nx128_nt4800_seed8_Z2.txt"
-    try:
-        create_animation(time_steps, base_filename, "isosurface_animation.gif")
-    except Exception as e:
-        print(f"Error creating animation: {e}")
-    """
+
+    
+    wall_plot("Data/valsPerLoop_3d_2hdm_nx_0_128_nt4800_random.txt")
