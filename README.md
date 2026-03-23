@@ -108,17 +108,18 @@ Some simulations in this repository are computationally demanding. Below are gui
 |--------|----------------|--------|----------------------|
 | `function_shape.py` | Minutes | < 1 GB | Any desktop |
 | `evolving-8.py` (2D, 256² grid) | Hours | 2–4 GB | Desktop / cluster |
-| `mpi_2HDM_random_initial_3D.cpp` (128³ grid) | Days | > 32 GB | Cluster with MPI |
-| `*Floquet.py` (2D, 129 radial points) | Hours to days | 8–16 GB | High‑memory node |
+| `mpi_2HDM_random_initial_3D.cpp` (128³ grid) | Days | 8–16 GB | High‑memory node  |
+| `*Floquet.py` (2D, 129 radial points) | Hours | 2–4 GB | Desktop / cluster |
 
 ### 💡 Tips for Reducing Computational Cost
+but with less accuracy
 
 1. **Decrease grid resolution**:  
    - For 2D, change `nx`, `ny` in the script (e.g., from 256 to 128).  
    - For 3D, reducing `nz` will dramatically cut memory/time.
 
 2. **Shorten simulation time**:  
-   - Modify `nt` to a smaller value (e.g., half the light crossing time).
+   - Modify `nt` to a smaller value.
 
 3. **Use lower precision in Floquet analysis**:  
    - In `*Floquet.py`, reduce `n_time_samples` (e.g., from 40000 to 5000).  
