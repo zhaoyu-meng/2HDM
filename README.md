@@ -28,7 +28,7 @@ The code reproduces all numerical results, including:
     │   ├── 2HDM_random_initial_loop.cpp
     │   ├── 4field_random_initial_loop.cpp
     │   ├── 2field_random_initial_loop.cpp
-    │   ├── 2D_plot.py                 # Plot 2D R1 distribution and energy density
+    │   ├── 2D_plot.py                 # Plot 2D R1 distribution
     │   ├── 3D_plot.py                 # Extract and visualize 3D isosurface
     │   ├── histogram.py               # Compute and plot bubble lifetimes
     ├── ideal_structure/               # Reproduction of the long-lived structure
@@ -44,6 +44,7 @@ The code reproduces all numerical results, including:
     │       └── 4-field-3D-Floquet.py      # Floquet analysis for 4‑field (3D)   
     ├── requirements.txt               # Python dependencies
     ├── LICENSE                        # MIT License
+    ├── 2D_solutions_omega_0.45.txt    # output data of f0/f1 values, used for artificial setup
     └── README.md                      # This file
 
 ---
@@ -60,43 +61,58 @@ Install with:
 
 ### C++
 - C++11 compiler (g++, icc, etc.)
+- MPI library (OpenMPI/MPICH) for parallel runs
 
 Compile example:
 
-    mpic++ -O3 -std=c++11 C++/simulation_2hdm_artificial.cpp -o oscillon_2hdm
+    cd natural_evolution
+    mpic++ -O3 -std=c++11 2HDM_random_initial_2D.cpp -o dw_2hdm
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start--Natural evolution
 
-### 1. Generate oscillon profiles (required for artificial simulations)
 
-    cd Python
-    python function_shape.py   # creates 2D_solutions_omega_0.4500_4fields.txt etc.
+
+### 1. Run a domain wall decay simulation (random initial conditions)
+
+    cd natural_evolution
+    ./2HDM_random_initial_2D          # 2D, full 2HDM, start with ramdom field distribution
+
+
+
+## 🚀 Quick Start--Reproduction of the long-lived structure
+
+### 1. Generate background oscillon profiles (required for artificial simulations)
+
+    cd ideal_structure/plot
+    python function_shape.py
+
+This creates `2D_solutions_omega_0.45.txt` in the root directory.
 
 ### 2. Run a domain wall decay simulation (random initial conditions)
 
-    python 2HDM_random.py          # full 2HDM, 2D, random initial fields
+    cd ideal_structure/plot
+    ./simulation_2hdm_artificial          # 2D, full 2HDM, start with f0/f1
 
-To vary the number of active fields, use `4_fields_random.py` or `2_fields_random.py`.  
-For 3D, modify the C++ program `mpi_2HDM_random_initial_3D.cpp` and compile.
+For 4-fields system, compile and run `simulation_4fields_artificial .cpp` .
+The script reads `2D_solutions_omega_0.45.txt`. Output snapshots are saved in `Data/`.
 
 ### 3. Simulate an isolated oscillon (artificial initial condition)
 
-    python evolving-8.py            # 2HDM oscillon with absorbing boundaries
-
-The script reads the previously generated profile file. Output snapshots are saved in `Data/`.
+    cd ideal_structure/plot
+    ./simulation_2hdm_artificial      # 2HDM oscillon with absorbing boundaries
 
 ### 4. Perform Floquet stability analysis
 
-    python 2HDM-2D-Floquet.py        # computes eigenvalues and plots Floquet multipliers
+    cd ideal_structure/Floquet
+    python 2HDM-2D-Floquet.py         # computes eigenvalues and plots Floquet multipliers
 
-For 3D, use `2HDM-3D-Floquet.py` (note: very memory intensive).
+For 3D, use `2HDM-3D-Floquet.py`.
 
 ### 5. Visualize results
-- **2D R1 distribution**: `python 2D_plot.py`
-- **GIF animation**: `python plot_gif.py`
-- **3D isosurface**: `python 3D_plot.py` (requires 3D data files)
+
+- **GIF animation**: `cd ideal_structure/plot && python plot_gif.py`
 
 ---
 
@@ -118,13 +134,12 @@ but with less accuracy
 
 1. **Decrease grid resolution**:  
    - For 2D, change `nx`, `ny` in the script (e.g., from 256 to 128).  
-   - For 3D, reducing `nz` will dramatically cut memory/time.
 
 2. **Shorten simulation time**:  
    - Modify `nt` to a smaller value.
 
 3. **Use lower precision in Floquet analysis**:  
-   - In `*Floquet.py`, reduce `n_time_samples` (e.g., from 40000 to 5000).  
+   - In `*Floquet.py`, reduce `n_time_samples` (e.g., from 40000 to 5000) or number of radial points `Nr`.  
    - This will still give a qualitative stability picture but with less accuracy.
 
 4. **Run on a cluster / HPC**:  
@@ -133,9 +148,6 @@ but with less accuracy
 
          mpic++ -O3 -std=c++11 C++/mpi_2HDM_random_initial_3D.cpp -o dw_3d
          mpirun -np 32 ./dw_3d
-
-5. **Use checkpointing**:  
-   - The Python scripts do not automatically save intermediate states. For long runs, you may add checkpointing (e.g., save fields every N steps) to resume from a crash.
 
 ### 📥 Pre‑computed Data (Optional)
 
@@ -154,12 +166,11 @@ If you only need to reproduce the figures, you can download pre‑computed simul
 | Figure | Description | Command / Method |
 |--------|-------------|------------------|
 | Fig. 1 | Domain wall length evolution | Run `2HDM_random.py` and plot `valsPerLoop*.txt` column 5 |
-| Fig. 2 | Lifetime histograms | Run `histogram.py` (requires many seeds) |
+| Fig. 2 | Lifetime histograms | Run `2HDM_random_initial_loop.cpp` + `4fields_random_initial_loop.cpp` + `2fields_random_initial_loop.cpp` then `histogram.py` (requires many seeds) |
 | Fig. 3 | Background profiles | `python function_shape.py` |
-| Fig. 4 | Oscillon evolution snapshots | `python evolving-8.py` + `python plot_gif.py` |
-| Fig. 5 | Floquet multipliers (4‑field) | `python 4-field-2D-Floquet.py` |
-| Fig. 6 | Background profiles for 2HDM | `python function_shape.py` (already includes 2HDM) |
-| Fig. 7 | Floquet multipliers for 2HDM | `python 2HDM-2D-Floquet.py` |
+| Fig. 4 | Oscillon evolution snapshots | `./simulation_4fields_artificial` + `python plot_gif.py` |
+| Fig. 5 | Floquet multipliers (4‑field) | `python 4-field-2D-Floquet.py` +  `python 4-field-3D-Floquet.py` |
+| Fig. 6 | Floquet multipliers for 2HDM | `python 2HDM-2D-Floquet.py` + `python 2HDM-3D-Floquet.py` |
 
 *For 3D results (Fig. 1b, 3b, etc.), use the corresponding C++ code or the pre‑computed data.*
 
