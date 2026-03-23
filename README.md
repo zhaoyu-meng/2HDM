@@ -1,6 +1,6 @@
 # Long-Lived Oscillons as Closed Domain Walls in the Z₂-Symmetric Two-Higgs-Doublet Model
 
-[![arXiv](https://img.shields.io/badge/arXiv-xxxx.xxxxx-red)](https://arxiv.org/abs/xxxx.xxxxx)
+[![arXiv](https://img.shields.io/badge/arXiv-2601.14676-red)](https://arxiv.org/abs/2601.14676)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
 [![C++11](https://img.shields.io/badge/C%2B%2B-11-blue.svg)](https://en.cppreference.com/w/cpp/11)
@@ -8,8 +8,8 @@
 This repository contains the complete source code for the paper:
 
 > **“Long-Lived Oscillons as Closed Domain Walls in the Z₂-Symmetric Two-Higgs-Doublet Model”**  
-> Zhaoyu Meng, Huazhong University of Science and Technology, June 2025
-
+> Zhaoyu Meng, Mar 2026
+> arXiv:2601.14676 [hep-ph]
 The code reproduces all numerical results, including:
 - Domain wall decay simulations in 2D and 3D with random initial conditions.
 - Reconstruction of radiation‑free oscillon solutions in four‑field and full 2HDM systems.
@@ -58,7 +58,6 @@ Install with:
 
 ### C++
 - C++11 compiler (g++, icc, etc.)
-- MPI library (OpenMPI/MPICH) for parallel runs
 
 Compile example:
 
@@ -187,11 +186,14 @@ For high‑performance runs (especially 3D), compile the C++ code with MPI suppo
 
 If you use this code in your research, please cite the accompanying paper:
 
-    @article{meng2025longlived,
-      title={Long-Lived Oscillons as Closed Domain Walls in the Z₂-Symmetric Two-Higgs-Doublet Model},
-      author={Meng, Zhaoyu},
-      journal={arXiv preprint},
-      year={2025}
+    @misc{meng2026longlivedoscillonscloseddomain,
+      title={Long-Lived Oscillons as Closed Domain Walls in the $\mathbb Z_2$-Symmetric Two-Higgs-Doublet Model}, 
+      author={Zhaoyu Meng},
+      year={2026},
+      eprint={2601.14676},
+      archivePrefix={arXiv},
+      primaryClass={hep-ph},
+      url={https://arxiv.org/abs/2601.14676}, 
     }
 
 ---
