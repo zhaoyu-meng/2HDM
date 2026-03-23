@@ -438,7 +438,7 @@ int main() {
             cout << "\rFile:"<< outTag<<", Timestep " << TimeStep << " completed." << flush;
     }
 
-    cout << "\rFile:"<< outTag<<", Timestep " << TimeStep << " completed." << endl;
+    cout << "\rFile:"<< outTag<<", Timestep " << nt << " completed." << endl;
     gettimeofday(&end, NULL);
     cout << "Time taken: " << end.tv_sec - start.tv_sec << "s" << endl;
     }
